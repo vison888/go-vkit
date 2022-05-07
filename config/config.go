@@ -14,8 +14,8 @@ import (
 )
 
 type Config struct {
-	m           map[string]interface{} // 一维，存储 key 和 value。
-	Client      *Client
+	m map[string]interface{} // 一维，存储 key 和 value。
+	// Client      *Client
 	currentPath string
 	commonPath  string
 }
@@ -155,10 +155,10 @@ func (c *Config) loadCmdArgs() error {
 	return nil
 }
 
-func SetClient(client *Client) {
-	c := defaultConfig
-	c.Client = client
-}
+// func SetClient(client *Client) {
+// 	c := defaultConfig
+// 	c.Client = client
+// }
 
 func Get(key string, opts ...interface{}) interface{} {
 	c := defaultConfig
@@ -278,11 +278,12 @@ func InitConfigs(commonPath string, fileNames ...string) error {
 			content = b
 		} else {
 			//通过网络获取
-			ret, err := c.Client.Load(fileName)
-			if err != nil {
-				return err
-			}
-			content = []byte(ret)
+			// ret, err := c.Client.Load(fileName)
+			// if err != nil {
+			// 	return err
+			// }
+			// content = []byte(ret)
+			logger.Info("TODO")
 		}
 		err := c.fetchConfig(content)
 		if err != nil {
