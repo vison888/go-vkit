@@ -13,16 +13,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/visonlv/go-vkit/errors/neterrors"
 	"github.com/visonlv/go-vkit/grpcclient"
 	"github.com/visonlv/go-vkit/logger"
 	meta "github.com/visonlv/go-vkit/metadata"
-	"github.com/google/uuid"
 )
 
 type authFunc func(w http.ResponseWriter, r *http.Request) bool
 
 type Handler struct {
+}
+
+func NewHandler() *Handler {
+	return &Handler{}
 }
 
 func errorResponse(w http.ResponseWriter, r *http.Request, _err error) {

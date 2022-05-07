@@ -181,7 +181,7 @@ func GetString(key string, opts ...interface{}) string {
 	case string:
 		return s
 	}
-	logger.Errorf("GetString key:%s fail not bool\n", key)
+	logger.Errorf("GetString key:%s fail not string\n", key)
 	return ""
 }
 
