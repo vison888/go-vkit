@@ -1,2 +1,2 @@
-# go-infore
+# go-vkit
 
