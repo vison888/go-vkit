@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/visonlv/go-vkit/codec"
 	"github.com/visonlv/go-vkit/errors/neterrors"
 	"github.com/visonlv/go-vkit/logger"
 	"github.com/visonlv/go-vkit/metadata"
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 	gmetadata "google.golang.org/grpc/metadata"
@@ -79,6 +79,7 @@ func (ccc *CustomClientConn) Invoke(ctx context.Context, method string, args int
 	md := gmetadata.New(header)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 
+	logger.Infof("xContentType=%s", xContentType)
 	cf, ok := codec.DefaultGRPCCodecs[xContentType]
 	if !ok {
 		return neterrors.BadRequest("[grpcclient] codec not found")

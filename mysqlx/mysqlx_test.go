@@ -11,12 +11,12 @@ import (
 )
 
 // CREATE DATABASE IF NOT EXISTS speech DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;
-// CREATE TABL(
+// CREATE TABLE (
 // 	`id` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT 'id',
 // 	`create_by` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '创建人',
 // 	`created_at` timestamp(0) NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '创建时间',
 // 	`updated_at` timestamp(0) NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '更新时间',
-// 	`status` smallint(4) NULL DEFAULT 1 COMMENT '状态',
+// 	`status` smallint(4) NULL DEFAULT 1 COMMENT '状态 0 正常 1 删除',
 // 	`password` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '密码',
 // 	`username` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT '更新人',
 // 	`haha` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL COMMENT 'haha',
@@ -24,10 +24,7 @@ import (
 // 	) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = Dynamic;
 
 func getClient() *MysqlClient {
-	cc, err := NewClient("mysql", "root", "123456", "tcp(127.0.0.1:3306)/speech?charset=utf8mb4&parseTime=True&loc=Local")
-	if err != nil {
-		logger.Infof("err:=%s", err)
-	}
+	cc := NewClient("mysql", "root", "123456", "tcp(127.0.0.1:3306)/speech?charset=utf8mb4&parseTime=True&loc=Local", 100, 10, 3600)
 	return cc
 }
 func TestInsert(t *testing.T) {

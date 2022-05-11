@@ -177,12 +177,7 @@ func GetString(key string, opts ...interface{}) string {
 		logger.Errorf("GetString key:%s not exit\n", key)
 		return ""
 	}
-	switch s := val.(type) {
-	case string:
-		return s
-	}
-	logger.Errorf("GetString key:%s fail not string\n", key)
-	return ""
+	return toString(val)
 }
 
 func GetBool(key string, opts ...interface{}) bool {

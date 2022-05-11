@@ -3,7 +3,6 @@ package grpcclient
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"github.com/visonlv/go-vkit/errors/neterrors"
 )
@@ -12,7 +11,7 @@ var (
 	serverName2Addr = map[string]string{}
 )
 
-func InvokeByGate(ctx context.Context, addrName string, endpoint string, jsonBody []byte) (*json.RawMessage, *neterrors.NetError) {
+func InvokeByGate(ctx context.Context, addrName string, url string, jsonBody []byte) (*json.RawMessage, *neterrors.NetError) {
 	//get conn from addrName
 	ccc, ok := GetClient(addrName)
 	if !ok {
@@ -21,8 +20,7 @@ func InvokeByGate(ctx context.Context, addrName string, endpoint string, jsonBod
 
 	reply := &json.RawMessage{}
 
-	methodName := strings.ReplaceAll(endpoint, ".", "/")
-	err := ccc.Invoke(ctx, "/"+methodName, jsonBody, reply)
+	err := ccc.Invoke(ctx, url, jsonBody, reply)
 	switch err {
 	case nil:
 		return reply, nil

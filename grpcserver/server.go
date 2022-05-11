@@ -18,6 +18,7 @@ import (
 	"github.com/visonlv/go-vkit/logger"
 	meta "github.com/visonlv/go-vkit/metadata"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/reflection"
@@ -41,6 +42,11 @@ type grpcServer struct {
 
 	sync.RWMutex
 	handlers map[string]*handlerInfo
+}
+
+func init() {
+	encoding.RegisterCodec(codec.WrapCodec{codec.JsonCodec{}})
+	encoding.RegisterCodec(codec.WrapCodec{codec.ProtoCodec{}})
 }
 
 func NewServer(opts ...grpc.ServerOption) *grpcServer {
@@ -73,7 +79,7 @@ func serviceMethod(m string) (string, string, error) {
 			return "", "", fmt.Errorf("[grpcserver] malformed method name: %q", m)
 		}
 		service := strings.Split(parts[1], ".")
-		return service[len(service)-1], parts[2], nil
+		return service[len(service)-1], m, nil
 	}
 
 	parts := strings.Split(m, ".")
@@ -82,7 +88,7 @@ func serviceMethod(m string) (string, string, error) {
 		return "", "", fmt.Errorf("[grpcserver] malformed method name: %q", m)
 	}
 
-	return parts[0], parts[1], nil
+	return parts[0], m, nil
 }
 
 func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err error) {
@@ -102,25 +108,26 @@ func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err err
 		return neterrors.NotFound(errorStr)
 	}
 
-	service, endpoint, err := serviceMethod(fullMethod)
-	if err != nil {
-		errorStr := fmt.Sprintf("[grpcserver] serviceMethod error: %v", err)
-		logger.Errorf(errorStr)
-		return neterrors.NotFound(errorStr)
-	}
+	// service, endpoint, err := serviceMethod(fullMethod)
+	// if err != nil {
+	// 	errorStr := fmt.Sprintf("[grpcserver] serviceMethod error: %v", err)
+	// 	logger.Errorf(errorStr)
+	// 	return neterrors.NotFound(errorStr)
+	// }
 
-	if len(service) == 0 {
-		errorStr := fmt.Sprintf("[grpcserver] service not found name: %q", fullMethod)
-		logger.Errorf(errorStr)
-		return neterrors.NotFound(errorStr)
-	}
+	// if len(service) == 0 {
+	// 	errorStr := fmt.Sprintf("[grpcserver] service not found name: %q", fullMethod)
+	// 	logger.Errorf(errorStr)
+	// 	return neterrors.NotFound(errorStr)
+	// }
 
-	if len(endpoint) == 0 {
-		errorStr := fmt.Sprintf("[grpcserver] endpoint not found name: %q", fullMethod)
-		logger.Errorf(errorStr)
-		return neterrors.NotFound(errorStr)
-	}
-	methodName := strings.ToLower(service + "." + endpoint)
+	// if len(endpoint) == 0 {
+	// 	errorStr := fmt.Sprintf("[grpcserver] endpoint not found name: %q", fullMethod)
+	// 	logger.Errorf(errorStr)
+	// 	return neterrors.NotFound(errorStr)
+	// }
+
+	methodName := fullMethod
 
 	gmd, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
@@ -171,7 +178,6 @@ func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err err
 		}
 	}
 
-	methodName = strings.ToLower(methodName)
 	h, b := g.handlers[methodName]
 	if !b {
 		errorStr := fmt.Sprintf("[grpcserver] unknown method %s", methodName)
@@ -286,15 +292,15 @@ func (g *grpcServer) RegisterWithUrl(i interface{}, urls map[string]string) (err
 			reqType:  pType1,
 			respType: pType2,
 		}
-		handlerMethodName := hName + "." + m.Name
+		methodName := hName + "." + m.Name
 		if urls != nil {
-			path, b := urls[handlerMethodName]
+			path, b := urls[methodName]
 			if b {
-				handlerMethodName = path
+				methodName = path
 			}
 		}
-		g.handlers[handlerMethodName] = handler
-		logger.Infof("[grpcServer] Register handlerMethodName:[%v]", handlerMethodName)
+		g.handlers[methodName] = handler
+		logger.Infof("[grpcServer] Register methodName:[%v]", methodName)
 	}
 	return nil
 }

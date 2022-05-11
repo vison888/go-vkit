@@ -63,6 +63,35 @@ func (the *MysqlClient) FindById(o interface{}, id string) error {
 	return nil
 }
 
+func (the *MysqlClient) FindPage(page int32, size int32, o interface{}, count *int32) error {
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 {
+		size = 10
+	}
+
+	skip := int64((page - 1) * size)
+	limit := int64(size)
+
+	var count64 int64
+	the.Count(&count64)                                       //总行数
+	result := the.Offset(int(skip)).Limit(int(limit)).Find(o) //查询pageindex页的数据
+
+	if result.db.Error != nil {
+		return result.db.Error
+	}
+	return nil
+}
+
+func (the *MysqlClient) FindList(o interface{}) error {
+	result := the.Find(o)
+	if result.db.Error != nil {
+		panic(result.db.Error)
+	}
+	return nil
+}
+
 //支持多个数据更新
 func (the *MysqlClient) Update(o interface{}) error {
 	result := the.db.Save(o)

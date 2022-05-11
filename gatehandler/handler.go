@@ -20,7 +20,7 @@ import (
 	meta "github.com/visonlv/go-vkit/metadata"
 )
 
-type authFunc func(w http.ResponseWriter, r *http.Request) bool
+type authFunc func(w http.ResponseWriter, r *http.Request) error
 
 type Handler struct {
 }
@@ -118,9 +118,8 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, authCheck authF
 		return
 	}
 
-	if !authCheck(w, r) {
-		errorStr := fmt.Sprintf("[gatehandler] check token fail url:%s", r.RequestURI)
-		errorResponse(w, r, neterrors.BadRequest(errorStr))
+	if cerr := authCheck(w, r); cerr != nil {
+		errorResponse(w, r, cerr)
 		return
 	}
 
@@ -141,7 +140,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, authCheck authF
 	path := strings.Split(r.RequestURI, "/")
 	if len(path) > 3 {
 		service = path[2]
-		endpoint = path[3]
+		endpoint = r.RequestURI
 	}
 
 	if len(service) == 0 {

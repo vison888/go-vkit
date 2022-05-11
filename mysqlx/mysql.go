@@ -46,3 +46,18 @@ func (the *MysqlClient) Group(name string) *MysqlClient {
 	tx := the.db.Group(name)
 	return NewOnChain(the, tx)
 }
+
+func (the *MysqlClient) Offset(offset int) *MysqlClient {
+	tx := the.db.Offset(offset)
+	return NewOnChain(the, tx)
+}
+
+func (the *MysqlClient) Limit(limit int) *MysqlClient {
+	tx := the.db.Limit(limit)
+	return NewOnChain(the, tx)
+}
+
+func (the *MysqlClient) Find(dest interface{}, conds ...interface{}) *MysqlClient {
+	tx := the.db.Find(dest, conds...)
+	return NewOnChain(the, tx)
+}
