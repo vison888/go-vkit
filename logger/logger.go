@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -193,6 +194,16 @@ func Error(format string, v ...interface{}) {
 
 func Debug(format string, v ...interface{}) {
 	Debugf(format, v...)
+}
+
+func JsonInfo(format string, v interface{}) {
+	bb, e := json.Marshal(v)
+	if e != nil {
+		Errorf("e:%s", e)
+		return
+	}
+
+	Debugf(format, string(bb))
 }
 
 func CanServerLog(xct string) bool {

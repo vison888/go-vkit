@@ -61,3 +61,16 @@ func (the *MysqlClient) Find(dest interface{}, conds ...interface{}) *MysqlClien
 	tx := the.db.Find(dest, conds...)
 	return NewOnChain(the, tx)
 }
+
+func (the *MysqlClient) Raw(sql string, values ...interface{}) *MysqlClient {
+	tx := the.db.Raw(sql, values...)
+	return NewOnChain(the, tx)
+}
+
+func (the *MysqlClient) Rows() (*sql.Rows, error) {
+	return the.db.Rows()
+}
+
+func (the *MysqlClient) ScanRows(rows *sql.Rows, dest interface{}) error {
+	return the.db.ScanRows(rows, dest)
+}

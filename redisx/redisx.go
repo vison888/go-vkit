@@ -43,13 +43,21 @@ func NewDefault() *RedisClient {
 	return &RedisClient{c: rdb}
 }
 
-func (c *RedisClient) Set(key *RedisKey, sub string, value interface{}) error {
+func GetFullKey(key *RedisKey, sub string) string {
+	if sub == "" {
+		return key.Code
+	}
 	fullKey := key.Code + ":" + sub
+	return fullKey
+}
+
+func (c *RedisClient) Set(key *RedisKey, sub string, value interface{}) error {
+	fullKey := GetFullKey(key, sub)
 	return c.c.Set(context.Background(), fullKey, value, key.Expire).Err()
 }
 
 func (c *RedisClient) SetJson(key *RedisKey, sub string, value interface{}) error {
-	fullKey := key.Code + ":" + sub
+	fullKey := GetFullKey(key, sub)
 	bytes, err := json.Marshal(value)
 	if err != nil {
 		return err
@@ -58,12 +66,12 @@ func (c *RedisClient) SetJson(key *RedisKey, sub string, value interface{}) erro
 }
 
 func (c *RedisClient) GetString(key *RedisKey, sub string) (string, error) {
-	fullKey := key.Code + ":" + sub
+	fullKey := GetFullKey(key, sub)
 	return c.c.Get(context.Background(), fullKey).Result()
 }
 
 func (c *RedisClient) GetInt64(key *RedisKey, sub string) (int64, error) {
-	fullKey := key.Code + ":" + sub
+	fullKey := GetFullKey(key, sub)
 	return c.c.Get(context.Background(), fullKey).Int64()
 }
 
@@ -72,7 +80,7 @@ func (c *RedisClient) GetInt(key *RedisKey, sub string) (int, error) {
 }
 
 func (c *RedisClient) GetJson(key *RedisKey, sub string, to interface{}) error {
-	fullKey := key.Code + ":" + sub
+	fullKey := GetFullKey(key, sub)
 	s, err := c.c.Get(context.Background(), fullKey).Result()
 	if err != nil {
 		return err
@@ -81,11 +89,48 @@ func (c *RedisClient) GetJson(key *RedisKey, sub string, to interface{}) error {
 }
 
 func (c *RedisClient) GetSet(key *RedisKey, sub string, value string) (string, error) {
-	fullKey := key.Code + ":" + sub
+	fullKey := GetFullKey(key, sub)
 	return c.c.GetSet(context.Background(), fullKey, value).Result()
 }
 
 func (c *RedisClient) IncrBy(key *RedisKey, sub string, value int64) (int64, error) {
-	fullKey := key.Code + ":" + sub
+	fullKey := GetFullKey(key, sub)
 	return c.c.IncrBy(context.Background(), fullKey, value).Result()
+}
+
+func (c *RedisClient) GetHashJson(key *RedisKey, sub string, hash string, to interface{}) error {
+	fullKey := GetFullKey(key, sub)
+	s, err := c.c.HGet(context.Background(), fullKey, hash).Result()
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal([]byte(s), to)
+}
+
+func (c *RedisClient) GetHashAllJson(key *RedisKey, sub string) (map[string]string, error) {
+	fullKey := GetFullKey(key, sub)
+	s, err := c.c.HGetAll(context.Background(), fullKey).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+func (c *RedisClient) SetHashJson(key *RedisKey, sub string, hash string, value interface{}) error {
+	fullKey := GetFullKey(key, sub)
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	intCmd := c.c.HSet(context.Background(), fullKey, hash, string(bytes)).Err()
+	if intCmd != nil {
+		return intCmd
+	}
+
+	if key.Expire > 0 {
+		c.c.Expire(context.Background(), fullKey, key.Expire)
+	}
+
+	return nil
 }
