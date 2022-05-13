@@ -137,15 +137,16 @@ func (g *Handler) RegisterWithUrl(i interface{}, urls map[string]string) (err er
 			reqType:  pType1,
 			respType: pType2,
 		}
-		handlerMethodName := hName + "." + m.Name
+		methodName := hName + "." + m.Name
+		reqUrl := methodName
 		if urls != nil {
-			path, b := urls[handlerMethodName]
+			path, b := urls[methodName]
 			if b {
-				handlerMethodName = path
+				reqUrl = path
 			}
 		}
-		g.handlers[handlerMethodName] = handler
-		logger.Infof("[httphandler] Register handlerMethodName:[%v]", handlerMethodName)
+		g.handlers[reqUrl] = handler
+		logger.Infof("[grpcServer] Register methodName:%v reqUrl:%s", methodName, reqUrl)
 	}
 	return nil
 }
