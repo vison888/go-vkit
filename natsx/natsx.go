@@ -1,5 +1,6 @@
 package natsx
 
+//github.com/nats-io/nats-server/v2 v2.8.2 // indirect
 import (
 	"time"
 
