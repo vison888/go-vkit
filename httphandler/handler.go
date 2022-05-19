@@ -25,10 +25,12 @@ import (
 type authFunc func(w http.ResponseWriter, r *http.Request) bool
 
 type handlerInfo struct {
-	handler  reflect.Value
-	method   reflect.Method
-	reqType  reflect.Type
-	respType reflect.Type
+	handler      reflect.Value
+	method       reflect.Method
+	reqType      reflect.Type
+	respType     reflect.Type
+	clientStream bool
+	serverStream bool
 }
 
 type Handler struct {
@@ -111,7 +113,7 @@ func requestPayload(r *http.Request) (bytes []byte, err error) {
 	}
 }
 
-func (g *Handler) RegisterList(list []interface{}, urls map[string]string) (err error) {
+func (g *Handler) RegisterList(list []interface{}, urls map[string][]string) (err error) {
 	for _, v := range list {
 		err := g.RegisterWithUrl(v, urls)
 		if err != nil {
@@ -121,7 +123,7 @@ func (g *Handler) RegisterList(list []interface{}, urls map[string]string) (err 
 	return nil
 }
 
-func (g *Handler) RegisterWithUrl(i interface{}, urls map[string]string) (err error) {
+func (g *Handler) RegisterWithUrl(i interface{}, urls map[string][]string) (err error) {
 	o := reflect.ValueOf(i)
 	hType := o.Type()
 	hName := hType.Elem().Name()
@@ -140,9 +142,13 @@ func (g *Handler) RegisterWithUrl(i interface{}, urls map[string]string) (err er
 		methodName := hName + "." + m.Name
 		reqUrl := methodName
 		if urls != nil {
-			path, b := urls[methodName]
+			desc, b := urls[methodName]
 			if b {
-				reqUrl = path
+				reqUrl = desc[0]
+				clientStream, _ := strconv.ParseBool(desc[1])
+				serverStream, _ := strconv.ParseBool(desc[2])
+				handler.clientStream = clientStream
+				handler.serverStream = serverStream
 			}
 		}
 		g.handlers[reqUrl] = handler

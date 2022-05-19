@@ -31,10 +31,12 @@ const (
 )
 
 type handlerInfo struct {
-	handler  reflect.Value
-	method   reflect.Method
-	reqType  reflect.Type
-	respType reflect.Type
+	handler      reflect.Value
+	method       reflect.Method
+	reqType      reflect.Type
+	respType     reflect.Type
+	clientStream bool
+	serverStream bool
 }
 
 type grpcServer struct {
@@ -68,29 +70,6 @@ func NewServer(opts ...grpc.ServerOption) *grpcServer {
 	return g
 }
 
-func serviceMethod(m string) (string, string, error) {
-	if len(m) == 0 {
-		return "", "", fmt.Errorf("[grpcserver] malformed method name: %q", m)
-	}
-
-	if m[0] == '/' {
-		parts := strings.Split(m, "/")
-		if len(parts) != 3 || len(parts[1]) == 0 || len(parts[2]) == 0 {
-			return "", "", fmt.Errorf("[grpcserver] malformed method name: %q", m)
-		}
-		service := strings.Split(parts[1], ".")
-		return service[len(service)-1], m, nil
-	}
-
-	parts := strings.Split(m, ".")
-
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("[grpcserver] malformed method name: %q", m)
-	}
-
-	return parts[0], m, nil
-}
-
 func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -107,25 +86,6 @@ func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err err
 		logger.Errorf(errorStr)
 		return neterrors.NotFound(errorStr)
 	}
-
-	// service, endpoint, err := serviceMethod(fullMethod)
-	// if err != nil {
-	// 	errorStr := fmt.Sprintf("[grpcserver] serviceMethod error: %v", err)
-	// 	logger.Errorf(errorStr)
-	// 	return neterrors.NotFound(errorStr)
-	// }
-
-	// if len(service) == 0 {
-	// 	errorStr := fmt.Sprintf("[grpcserver] service not found name: %q", fullMethod)
-	// 	logger.Errorf(errorStr)
-	// 	return neterrors.NotFound(errorStr)
-	// }
-
-	// if len(endpoint) == 0 {
-	// 	errorStr := fmt.Sprintf("[grpcserver] endpoint not found name: %q", fullMethod)
-	// 	logger.Errorf(errorStr)
-	// 	return neterrors.NotFound(errorStr)
-	// }
 
 	methodName := fullMethod
 
@@ -185,7 +145,54 @@ func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err err
 		return neterrors.NotFound(errorStr)
 	}
 
+	if h.clientStream || h.serverStream {
+		return g.processStream(stream, h, ct, xct, requestId, requestSq, methodName, ctx)
+	}
+
 	return g.processRequest(stream, h, ct, xct, requestId, requestSq, methodName, ctx)
+}
+
+func (g *grpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct string, xct string, requestId string, requestSq string, methodName string, ctx context.Context) error {
+	var argv reflect.Value
+	replyv := reflect.New(h.respType.Elem())
+	if h.reqType != nil {
+		argv = reflect.New(h.reqType.Elem())
+	}
+	//塞进去stream
+	setStreamFunc, b := h.respType.MethodByName("SetStream")
+	if b {
+		setStreamFunc.Func.Call([]reflect.Value{reflect.ValueOf(replyv.Interface()), reflect.ValueOf(stream)})
+	}
+
+	var in []reflect.Value
+	var out []reflect.Value
+	if h.reqType != nil {
+		//read first data
+		if err := stream.RecvMsg(argv.Interface()); err != nil {
+			return err
+		}
+		in = make([]reflect.Value, 4)
+		in[0] = h.handler
+		in[1] = reflect.ValueOf(ctx)
+		in[2] = argv
+		in[3] = replyv
+		out = h.method.Func.Call(in)
+	} else {
+		in = make([]reflect.Value, 3)
+		in[0] = h.handler
+		in[1] = reflect.ValueOf(ctx)
+		in[2] = replyv
+		out = h.method.Func.Call(in)
+	}
+	if rerr := out[0].Interface(); rerr != nil {
+		if verr, ok := rerr.(error); ok {
+			return verr
+		} else {
+			return fmt.Errorf("stream error %v", rerr)
+		}
+	}
+
+	return nil
 }
 
 func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct string, xct string, requestId string, requestSq string, methodName string, ctx context.Context) error {
@@ -246,7 +253,6 @@ func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct
 			logger.Errorf(errorStr)
 			return neterrors.BusinessError(-2, errorStr)
 		}
-
 	}
 
 	if err := stream.SendMsg(replyv.Interface()); err != nil {
@@ -266,7 +272,7 @@ func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct
 
 }
 
-func (g *grpcServer) RegisterList(list []interface{}, urls map[string]string) (err error) {
+func (g *grpcServer) RegisterList(list []interface{}, urls map[string][]string) (err error) {
 	for _, v := range list {
 		err := g.RegisterWithUrl(v, urls)
 		if err != nil {
@@ -276,7 +282,7 @@ func (g *grpcServer) RegisterList(list []interface{}, urls map[string]string) (e
 	return nil
 }
 
-func (g *grpcServer) RegisterWithUrl(i interface{}, urls map[string]string) (err error) {
+func (g *grpcServer) RegisterWithUrl(i interface{}, urls map[string][]string) (err error) {
 	o := reflect.ValueOf(i)
 	hType := o.Type()
 	hName := hType.Elem().Name()
@@ -284,22 +290,39 @@ func (g *grpcServer) RegisterWithUrl(i interface{}, urls map[string]string) (err
 	//反射方法
 	for i := 0; i < mCount; i++ {
 		m := hType.Method(i)
-		pType1 := m.Type.In(2)
-		pType2 := m.Type.In(3)
-		handler := &handlerInfo{
-			handler:  o,
-			method:   m,
-			reqType:  pType1,
-			respType: pType2,
-		}
 		methodName := hName + "." + m.Name
 		reqUrl := methodName
+		clientStream := false
+		serverStream := false
 		if urls != nil {
-			path, b := urls[methodName]
-			if b {
-				reqUrl = path
+			desc, b := urls[methodName]
+			if !b {
+				continue
 			}
+			reqUrl = desc[0]
+			clientStream, _ = strconv.ParseBool(desc[1])
+			serverStream, _ = strconv.ParseBool(desc[2])
 		}
+		var reqType reflect.Type
+		var respType reflect.Type
+		if m.Type.NumIn() == 3 {
+			respType = m.Type.In(2)
+		} else if m.Type.NumIn() == 4 {
+			reqType = m.Type.In(2)
+			respType = m.Type.In(3)
+		} else {
+			panic("in param numbre error methodName:=" + methodName)
+		}
+
+		handler := &handlerInfo{
+			handler:      o,
+			method:       m,
+			reqType:      reqType,
+			respType:     respType,
+			clientStream: clientStream,
+			serverStream: serverStream,
+		}
+
 		g.handlers[reqUrl] = handler
 		logger.Infof("[grpcServer] Register methodName:%v reqUrl:%s", methodName, reqUrl)
 	}

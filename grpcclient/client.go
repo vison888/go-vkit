@@ -167,8 +167,203 @@ func (ccc *CustomClientConn) Invoke(ctx context.Context, method string, args int
 }
 
 func (ccc *CustomClientConn) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	return nil, nil
+	header := make(map[string]string)
+
+	if md, ok := metadata.FromContext(ctx); ok {
+		for k, v := range md {
+			header[strings.ToLower(k)] = v
+		}
+	} else {
+		header = make(map[string]string)
+	}
+
+	xContentType := "application/grpc"
+	if v, ok := header["x-content-type"]; ok {
+		xContentType = v
+	}
+
+	if _, ok := header["request_id"]; !ok {
+		header["request_id"] = strings.ReplaceAll(uuid.New().String(), "-", "")
+	}
+	if sq, ok := header["request_sq"]; ok {
+		sqInt64, _ := strconv.ParseInt(sq, 10, 64)
+		header["request_sq"] = strconv.FormatInt(sqInt64+1, 10)
+	} else {
+		header["request_sq"] = "0"
+	}
+	// set timeout in nanoseconds
+	header["timeout"] = fmt.Sprintf("%d", DefaultRequestTimeout)
+	// set the content type for the request
+	header["x-content-type"] = xContentType
+	md := gmetadata.New(header)
+	ctx = gmetadata.NewOutgoingContext(ctx, md)
+
+	logger.Infof("xContentType=%s", xContentType)
+	cf, ok := codec.DefaultGRPCCodecs[xContentType]
+	if !ok {
+		return nil, neterrors.BadRequest("[grpcclient] codec not found")
+	}
+
+	grpcDialOptions := []grpc.DialOption{
+		grpc.WithTimeout(DefaultDialTimeout),
+		grpc.WithInsecure(),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(DefaultMaxRecvMsgSize),
+			grpc.MaxCallSendMsgSize(DefaultMaxSendMsgSize),
+		),
+	}
+
+	cc, err := ccc.pool.getConn(ccc.addr, grpcDialOptions...)
+	if err != nil {
+		return nil, neterrors.BadRequest("[grpcclient] Error sending request: %v", err)
+	}
+
+	grpcCallOptions := []grpc.CallOption{
+		grpc.ForceCodec(cf),
+		grpc.CallContentSubtype(cf.Name()),
+	}
+
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
+
+	st, err := cc.NewStream(ctx, desc, method, grpcCallOptions...)
+	if err != nil {
+		cancel()
+		ccc.pool.release(ccc.addr, cc, err)
+		return nil, neterrors.BadRequest(fmt.Sprintf("Error creating stream: %v", err))
+	}
+
+	// stream := &grpcStream{
+	// 	ClientStream: st,
+	// 	context:      ctx,
+	// 	conn:         cc,
+	// 	close: func(err error) {
+	// 		// cancel the context if an error occured
+	// 		if err != nil {
+	// 			cancel()
+	// 		}
+	// 		// defer execution of release
+	// 		ccc.pool.release(ccc.addr, cc, err)
+	// 	},
+	// }
+
+	return st, nil
 }
+
+// func (g *grpcClient) stream(ctx context.Context, addr string, req client.Request, rsp interface{}, opts client.CallOptions) error {
+// 	var header map[string]string
+
+// 	if md, ok := metadata.FromContext(ctx); ok {
+// 		header = make(map[string]string, len(md))
+// 		for k, v := range md {
+// 			header[k] = v
+// 		}
+// 	} else {
+// 		header = make(map[string]string)
+// 	}
+
+// 	// set timeout in nanoseconds
+// 	if opts.StreamTimeout > time.Duration(0) {
+// 		header["timeout"] = fmt.Sprintf("%d", opts.StreamTimeout)
+// 	}
+// 	// set the content type for the request
+// 	header["x-content-type"] = req.ContentType()
+
+// 	md := gmetadata.New(header)
+// 	ctx = gmetadata.NewOutgoingContext(ctx, md)
+
+// 	cf, err := g.newGRPCCodec(req.ContentType())
+// 	if err != nil {
+// 		return errors.InternalServerError("go.micro.client", err.Error())
+// 	}
+
+// 	maxRecvMsgSize := g.maxRecvMsgSizeValue()
+// 	maxSendMsgSize := g.maxSendMsgSizeValue()
+
+// 	grpcDialOptions := []grpc.DialOption{
+// 		grpc.WithTimeout(opts.DialTimeout),
+// 		g.secure(addr),
+// 		grpc.WithDefaultCallOptions(
+// 			grpc.MaxCallRecvMsgSize(maxRecvMsgSize),
+// 			grpc.MaxCallSendMsgSize(maxSendMsgSize),
+// 		),
+// 	}
+
+// 	if opts := g.getGrpcDialOptions(); opts != nil {
+// 		grpcDialOptions = append(grpcDialOptions, opts...)
+// 	}
+
+// 	cc, err := g.pool.getConn(addr, grpcDialOptions...)
+// 	if err != nil {
+// 		return errors.InternalServerError("go.micro.client", fmt.Sprintf("Error sending request: %v", err))
+// 	}
+
+// 	desc := &grpc.StreamDesc{
+// 		StreamName:    req.Service() + req.Endpoint(),
+// 		ClientStreams: true,
+// 		ServerStreams: true,
+// 	}
+
+// 	grpcCallOptions := []grpc.CallOption{
+// 		grpc.ForceCodec(cf),
+// 		grpc.CallContentSubtype(cf.Name()),
+// 	}
+// 	if opts := g.getGrpcCallOptions(); opts != nil {
+// 		grpcCallOptions = append(grpcCallOptions, opts...)
+// 	}
+
+// 	var cancel context.CancelFunc
+// 	ctx, cancel = context.WithCancel(ctx)
+
+// 	st, err := cc.NewStream(ctx, desc, methodToGRPC(req.Service(), req.Endpoint()), grpcCallOptions...)
+// 	if err != nil {
+// 		// we need to cleanup as we dialled and created a context
+// 		// cancel the context
+// 		cancel()
+// 		// release the connection
+// 		g.pool.release(addr, cc, err)
+// 		// now return the error
+// 		return errors.InternalServerError("go.micro.client", fmt.Sprintf("Error creating stream: %v", err))
+// 	}
+
+// 	codec := &grpcCodec{
+// 		s: st,
+// 		c: wc,
+// 	}
+
+// 	// set request codec
+// 	if r, ok := req.(*grpcRequest); ok {
+// 		r.codec = codec
+// 	}
+
+// 	// setup the stream response
+// 	stream := &grpcStream{
+// 		ClientStream: st,
+// 		context:      ctx,
+// 		request:      req,
+// 		response: &response{
+// 			conn:   cc,
+// 			stream: st,
+// 			codec:  cf,
+// 			gcodec: codec,
+// 		},
+// 		conn: cc,
+// 		close: func(err error) {
+// 			// cancel the context if an error occured
+// 			if err != nil {
+// 				cancel()
+// 			}
+
+// 			// defer execution of release
+// 			g.pool.release(addr, cc, err)
+// 		},
+// 	}
+
+// 	// set the stream as the response
+// 	val := reflect.ValueOf(rsp).Elem()
+// 	val.Set(reflect.ValueOf(stream).Elem())
+// 	return nil
+// }
 
 func DelConnClient(addr string) {
 	addr2conn.Delete(addr)
