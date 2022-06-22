@@ -28,39 +28,39 @@ func (the *MysqlClient) InsertBatch(o interface{}, batchSize int) error {
 	return nil
 }
 
-func (the *MysqlClient) DeleteById(o interface{}, id string) error {
+func (the *MysqlClient) DeleteById(o interface{}, id string) (bool, error) {
 	result := the.db.Delete(o, "id = ?", id)
 	if result.Error != nil {
-		return result.Error
+		return false, result.Error
 	}
 	if result.RowsAffected <= 0 {
-		return errors.New("DeleteById RowsAffected<=0")
+		return false, nil
 	}
-	return nil
+	return true, nil
 }
 
 //只能通过id删除
-func (the *MysqlClient) Delete(o interface{}) error {
+func (the *MysqlClient) Delete(o interface{}) (bool, error) {
 	result := the.db.Delete(o)
 	if result.Error != nil {
-		return result.Error
+		return false, result.Error
 	}
 	if result.RowsAffected <= 0 {
-		return errors.New("Delete RowsAffected<=0")
+		return false, nil
 	}
-	return nil
+	return true, nil
 }
 
 //通过id查找
-func (the *MysqlClient) FindById(o interface{}, id string) error {
+func (the *MysqlClient) FindById(o interface{}, id string) (bool, error) {
 	result := the.db.First(o, "id = ?", id)
 	if result.Error != nil {
-		return result.Error
+		return false, result.Error
 	}
 	if result.RowsAffected <= 0 {
-		return errors.New("empty")
+		return true, nil
 	}
-	return nil
+	return true, nil
 }
 
 func (the *MysqlClient) FindPage(page int32, size int32, o interface{}, count *int32) error {
@@ -87,9 +87,20 @@ func (the *MysqlClient) FindPage(page int32, size int32, o interface{}, count *i
 func (the *MysqlClient) FindList(o interface{}) error {
 	result := the.Find(o)
 	if result.db.Error != nil {
-		panic(result.db.Error)
+		return result.db.Error
 	}
 	return nil
+}
+
+func (the *MysqlClient) FindFirst(o interface{}) (bool, error) {
+	result := the.db.First(o)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected <= 0 {
+		return false, nil
+	}
+	return true, nil
 }
 
 //支持多个数据更新

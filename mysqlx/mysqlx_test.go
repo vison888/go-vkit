@@ -83,7 +83,7 @@ func TestUpdate(t *testing.T) {
 	cc := getClient()
 
 	u := &User{}
-	err := cc.FindById(u, "295b95475ca04071912f16fc603e714b")
+	_, err := cc.FindById(u, "295b95475ca04071912f16fc603e714b")
 
 	if err != nil {
 		logger.Infof("FindById fail :%s", err)

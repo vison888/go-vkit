@@ -62,6 +62,11 @@ func (the *MysqlClient) Find(dest interface{}, conds ...interface{}) *MysqlClien
 	return NewOnChain(the, tx)
 }
 
+func (the *MysqlClient) First(dest interface{}, conds ...interface{}) *MysqlClient {
+	tx := the.db.First(dest, conds...)
+	return NewOnChain(the, tx)
+}
+
 func (the *MysqlClient) Raw(sql string, values ...interface{}) *MysqlClient {
 	tx := the.db.Raw(sql, values...)
 	return NewOnChain(the, tx)
@@ -73,4 +78,9 @@ func (the *MysqlClient) Rows() (*sql.Rows, error) {
 
 func (the *MysqlClient) ScanRows(rows *sql.Rows, dest interface{}) error {
 	return the.db.ScanRows(rows, dest)
+}
+
+func (the *MysqlClient) Joins(query string, args ...interface{}) *MysqlClient {
+	tx := the.db.Joins(query, args...)
+	return NewOnChain(the, tx)
 }
