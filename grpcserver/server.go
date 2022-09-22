@@ -13,8 +13,9 @@ import (
 	"time"
 
 	"github.com/visonlv/go-vkit/codec"
-	"github.com/visonlv/go-vkit/errors"
-	"github.com/visonlv/go-vkit/errors/neterrors"
+	"github.com/visonlv/go-vkit/errorsx"
+	"github.com/visonlv/go-vkit/errorsx/neterrors"
+	"github.com/visonlv/go-vkit/grpcx"
 	"github.com/visonlv/go-vkit/logger"
 	meta "github.com/visonlv/go-vkit/metadata"
 	"google.golang.org/grpc"
@@ -87,7 +88,13 @@ func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err err
 		return neterrors.NotFound(errorStr)
 	}
 
-	methodName := fullMethod
+	serviceName, methodName, err := ServiceMethod(fullMethod)
+	if err != nil {
+		errorStr := "[grpcserver] ServiceMethod err:" + err.Error()
+		logger.Errorf(errorStr)
+		return neterrors.NotFound(errorStr)
+	}
+	methodName = fmt.Sprintf("%s.%s", serviceName, methodName)
 
 	gmd, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
@@ -158,7 +165,7 @@ func (g *grpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct 
 	if h.reqType != nil {
 		argv = reflect.New(h.reqType.Elem())
 	}
-	//塞进去stream
+
 	setStreamFunc, b := h.respType.MethodByName("SetStream")
 	if b {
 		setStreamFunc.Func.Call([]reflect.Value{reflect.ValueOf(replyv.Interface()), reflect.ValueOf(stream)})
@@ -241,11 +248,11 @@ func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct
 	out := h.method.Func.Call(in)
 	if rerr := out[0].Interface(); rerr != nil {
 		//处理业务异常
-		if verr, ok := rerr.(*errors.Errno); ok {
+		if verr, ok := rerr.(*errorsx.Errno); ok {
 			if verr.Code != 0 {
 				errorStr := fmt.Sprintf("[grpcserver] requestId:%s requestSq:%s call error: %s", requestId, requestSq, verr.Error())
 				logger.Errorf(errorStr)
-				return neterrors.BusinessError(verr.GetFullCode(), verr.Msg)
+				return neterrors.BusinessError(verr.Code, verr.Msg)
 			}
 		} else {
 			//其他异常统一包装
@@ -261,20 +268,21 @@ func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct
 		return neterrors.BusinessError(-2, errorStr)
 	}
 
-	if logger.CanServerLog(xct) {
-		jsonArgv, _ := json.Marshal(argv.Interface())
-		jsonReplyv, _ := json.Marshal(replyv.Interface())
-		successStr := fmt.Sprintf("[grpcserver] handler success requestId:%s requestSq:%s methodName:%s argv:%s replyv:%s", requestId, requestSq, methodName, jsonArgv, jsonReplyv)
-		logger.Info(successStr)
-	}
+	jsonArgv, _ := json.Marshal(argv.Interface())
+	jsonReplyv, _ := json.Marshal(replyv.Interface())
+	successStr := fmt.Sprintf("[grpcserver] handler success requestId:%s requestSq:%s methodName:%s argv:%s replyv:%s", requestId, requestSq, methodName, jsonArgv, jsonReplyv)
+	logger.Info(successStr)
 
 	return nil
-
 }
 
-func (g *grpcServer) RegisterList(list []interface{}, urls map[string][]string) (err error) {
+func (g *grpcServer) RegisterApiEndpoint(list []interface{}, apiEndpointList []*grpcx.ApiEndpoint) (err error) {
+	apiEndpointMap := make(map[string]*grpcx.ApiEndpoint, 0)
+	for _, v := range apiEndpointList {
+		apiEndpointMap[v.Method] = v
+	}
 	for _, v := range list {
-		err := g.RegisterWithUrl(v, urls)
+		err := g.RegisterWithUrl(v, apiEndpointMap)
 		if err != nil {
 			return err
 		}
@@ -282,7 +290,7 @@ func (g *grpcServer) RegisterList(list []interface{}, urls map[string][]string) 
 	return nil
 }
 
-func (g *grpcServer) RegisterWithUrl(i interface{}, urls map[string][]string) (err error) {
+func (g *grpcServer) RegisterWithUrl(i interface{}, apiEndpointMap map[string]*grpcx.ApiEndpoint) (err error) {
 	o := reflect.ValueOf(i)
 	hType := o.Type()
 	hName := hType.Elem().Name()
@@ -292,16 +300,18 @@ func (g *grpcServer) RegisterWithUrl(i interface{}, urls map[string][]string) (e
 		m := hType.Method(i)
 		methodName := hName + "." + m.Name
 		reqUrl := methodName
+		reqMethod := ""
 		clientStream := false
 		serverStream := false
-		if urls != nil {
-			desc, b := urls[methodName]
+		if apiEndpointMap != nil {
+			desc, b := apiEndpointMap[methodName]
 			if !b {
 				continue
 			}
-			reqUrl = desc[0]
-			clientStream, _ = strconv.ParseBool(desc[1])
-			serverStream, _ = strconv.ParseBool(desc[2])
+			reqUrl = desc.Url
+			clientStream = desc.ClientStream
+			serverStream = desc.ServerStream
+			reqMethod = desc.Method
 		}
 		var reqType reflect.Type
 		var respType reflect.Type
@@ -324,7 +334,10 @@ func (g *grpcServer) RegisterWithUrl(i interface{}, urls map[string][]string) (e
 		}
 
 		g.handlers[reqUrl] = handler
-		logger.Infof("[grpcServer] Register methodName:%v reqUrl:%s", methodName, reqUrl)
+		if reqMethod != "" {
+			g.handlers[reqMethod] = handler
+		}
+		logger.Infof("[grpcServer] Register reqUrl:%s reqMethod:%s", reqUrl, reqMethod)
 	}
 	return nil
 }
@@ -334,16 +347,15 @@ func (g *grpcServer) Register(i interface{}) (err error) {
 }
 
 func (g *grpcServer) Run(listenPort string) {
-	logger.Info("[grpcServer] Listen start port:[%s]", listenPort)
+	logger.Infof("[grpcServer] Listen start port:[%s]", listenPort)
 
 	lis, err := net.Listen("tcp", listenPort)
 	if err != nil {
-		logger.Error("[grpcServer] Listen failed e: %v", err.Error())
+		logger.Errorf("[grpcServer] Listen failed e: %v", err.Error())
 		return
 	}
 
 	if err := g.srv.Serve(lis); err != nil {
-		logger.Error("failed to serve: %v", err)
+		logger.Errorf("failed to serve: %v", err)
 	}
-
 }

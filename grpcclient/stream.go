@@ -39,10 +39,8 @@ func (g *grpcStream) Recv(msg interface{}) (err error) {
 		if err == io.EOF && closeErr != nil {
 			err = closeErr
 		}
-
 		return err
 	}
-
 	return
 }
 

@@ -1,4 +1,4 @@
-package gatehandler
+package gate
 
 import (
 	"net/http"
@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/visonlv/go-vkit/errors/neterrors"
+	"github.com/visonlv/go-vkit/errorsx/neterrors"
+	"github.com/visonlv/go-vkit/logger"
 )
 
 func TestSever(t *testing.T) {
@@ -22,8 +23,9 @@ func TestSever(t *testing.T) {
 	}
 
 	http.HandleFunc("/rpc/", func(w http.ResponseWriter, r *http.Request) {
-		NewHandler().Handle(w, r, tokenCheck)
+		NewHttpHandler(10000, tokenCheck).Handle(w, r)
 	})
 	go http.ListenAndServe(":9999", nil)
+	logger.Info("server start")
 	time.Sleep(1000)
 }

@@ -1,4 +1,4 @@
-package utils
+package utilsx
 
 //TODO
 func IsAnyEmpty(ss ...interface{}) bool {

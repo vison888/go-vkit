@@ -9,10 +9,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/visonlv/go-vkit/config"
-	"github.com/visonlv/go-vkit/logger"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/visonlv/go-vkit/logger"
 )
 
 type MinioClient struct {
@@ -22,16 +21,6 @@ type MinioClient struct {
 	AccessKey    string
 	AccessSecret string
 	BucketName   string
-}
-
-func NewDefault() (*MinioClient, error) {
-	doMain := config.GetString("store.minio.domain")
-	endPoint := config.GetString("store.minio.endPoint")
-	accessKey := config.GetString("store.minio.accessKey")
-	accessSecret := config.GetString("store.minio.accessSecret")
-	bucketName := config.GetString("store.minio.bucketName")
-
-	return NewClient(doMain, endPoint, accessKey, accessSecret, bucketName)
 }
 
 func NewClient(doMain, endPoint, accessKey, accessSecret, bucketName string) (*MinioClient, error) {
@@ -49,7 +38,7 @@ func NewClient(doMain, endPoint, accessKey, accessSecret, bucketName string) (*M
 		Secure: false,
 	})
 	if err != nil {
-		logger.Infof("[MinioClient] create client fail e:%s", err.Error())
+		logger.Errorf("[miniox] NewClient fail:%s doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", err.Error(), doMain, endPoint, accessKey, accessSecret, bucketName)
 		return nil, err
 	}
 
@@ -66,10 +55,11 @@ func NewClient(doMain, endPoint, accessKey, accessSecret, bucketName string) (*M
 	// 创建桶
 	err = c.Client.MakeBucket(ctx, c.BucketName, minio.MakeBucketOptions{})
 	if err != nil {
-		logger.Infof("[MinioClient] create bucket fail e:%s", err.Error())
+		logger.Errorf("[miniox] NewClient create bucket fail:%s doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", err.Error(), doMain, endPoint, accessKey, accessSecret, bucketName)
 		return nil, err
 	}
 
+	logger.Errorf("[miniox] NewClient success doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", err.Error(), doMain, endPoint, accessKey, accessSecret, bucketName)
 	return c, nil
 }
 

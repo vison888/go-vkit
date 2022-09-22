@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/visonlv/go-vkit/config"
 	"github.com/visonlv/go-vkit/logger"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -17,21 +16,12 @@ type MongoClient struct {
 	opTime time.Duration   // 每次操作(增删改查...)的最大时间
 }
 
-func NewDefault() (*MongoClient, error) {
-	db := config.GetString("database.mongo.db")
-	url := config.GetString("database.mongo.url")
-	opMaxSecord := time.Duration(config.GetInt("database.mongo.op-max-secord"))
-	if string
-
-	return NewClient(url, db, opMaxSecord*time.Second)
-}
-
 func NewClient(uri, dbName string, withTimeout time.Duration) (*MongoClient, error) {
 	opt := options.Client().ApplyURI(uri)
 	// 创建客户端
 	client, err := mongo.NewClient(opt)
 	if err != nil {
-		logger.Infof("[MongoClient] create client fail e:%s", err.Error())
+		logger.Errorf("[mongox] NewClient fail:%s uri:%s dbName:%s", err.Error(), uri, dbName)
 		return nil, err
 	}
 
@@ -42,14 +32,14 @@ func NewClient(uri, dbName string, withTimeout time.Duration) (*MongoClient, err
 	// 所以不用 defer client.Disconnect(ctx)
 	err = client.Connect(ctx)
 	if err != nil {
-		logger.Infof("[MongoClient] client connect  fail e:%s", err.Error())
+		logger.Errorf("[mongox] NewClient fail:%s uri:%s dbName:%s", err.Error(), uri, dbName)
 		return nil, err
 	}
 
 	// ping 3秒 还不通就取消~
 	err = client.Ping(ctx, readpref.Primary())
 	if err != nil {
-		logger.Infof("[MongoClient] client ping fail e:%s", err.Error())
+		logger.Errorf("[mongox] NewClient fail:%s uri:%s dbName:%s", err.Error(), uri, dbName)
 		return nil, err
 	}
 
@@ -58,6 +48,8 @@ func NewClient(uri, dbName string, withTimeout time.Duration) (*MongoClient, err
 		db:     client.Database(dbName), // 应用数据库
 		opTime: withTimeout,
 	}
+
+	logger.Infof("[mongox] NewClient success uri:%s dbName:%s", uri, dbName)
 
 	return mgoClient, nil
 }

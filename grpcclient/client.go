@@ -12,7 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/visonlv/go-vkit/codec"
-	"github.com/visonlv/go-vkit/errors/neterrors"
+	"github.com/visonlv/go-vkit/errorsx/neterrors"
+	"github.com/visonlv/go-vkit/grpcx"
 	"github.com/visonlv/go-vkit/logger"
 	"github.com/visonlv/go-vkit/metadata"
 	"google.golang.org/grpc"
@@ -26,13 +27,16 @@ var (
 
 	DefaultPoolMaxStreams = 20
 	DefaultPoolMaxIdle    = 50
+	DefaultPoolSize       = 100
+	DefaultPoolTTL        = time.Minute
+
 	DefaultMaxRecvMsgSize = 1024 * 1024 * 16
 	DefaultMaxSendMsgSize = 1024 * 1024 * 16
 	DefaultDialTimeout    = time.Second * 5
-	DefaultRequestTimeout = time.Second * 10
+	DefaultRequestTimeout = time.Second * 20
 )
 
-type CustomClientConn struct {
+type customClient struct {
 	grpc.ClientConnInterface
 	pool *pool
 	addr string
@@ -44,7 +48,8 @@ func init() {
 }
 
 // rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams())
-func (ccc *CustomClientConn) Invoke(ctx context.Context, method string, args interface{}, reply interface{}, opts ...grpc.CallOption) error {
+func (ccc *customClient) Invoke(ctx context.Context, service, endpoint string, args interface{}, reply interface{}, opts ...grpc.CallOption) error {
+	method := methodToGRPC(service, endpoint)
 	header := make(map[string]string)
 
 	if md, ok := metadata.FromContext(ctx); ok {
@@ -73,13 +78,25 @@ func (ccc *CustomClientConn) Invoke(ctx context.Context, method string, args int
 	requestSq := header["request_sq"]
 
 	// set timeout in nanoseconds
-	header["timeout"] = fmt.Sprintf("%d", DefaultRequestTimeout)
+	timeOut := DefaultRequestTimeout
+	if to, ok := header["timeout"]; !ok {
+		header["timeout"] = fmt.Sprintf("%d", DefaultRequestTimeout)
+	} else {
+		if len(to) > 0 {
+			if n, err := strconv.ParseUint(to, 10, 64); err == nil {
+				timeOut = time.Duration(n)
+			}
+		}
+	}
+
 	// set the content type for the request
 	header["x-content-type"] = xContentType
 	md := gmetadata.New(header)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 
-	logger.Infof("xContentType=%s", xContentType)
+	ctx, cancel := context.WithTimeout(ctx, timeOut)
+	defer cancel()
+
 	cf, ok := codec.DefaultGRPCCodecs[xContentType]
 	if !ok {
 		return neterrors.BadRequest("[grpcclient] codec not found")
@@ -150,23 +167,22 @@ func (ccc *CustomClientConn) Invoke(ctx context.Context, method string, args int
 		grr = neterrors.Timeout("[grpcclient] req fail %v", ctx.Err())
 	}
 
-	if logger.CanServerLog(xContentType) {
-		var jsonArgv []byte
-		if raw, ok := args.([]byte); ok {
-			jsonArgv = raw
-		} else {
-			jsonArgv, _ = json.Marshal(args)
-		}
-
-		jsonReplyv, _ := json.Marshal(reply)
-		successStr := fmt.Sprintf("[grpcclient] request success requestId:%s requestSq:%s methodName:%s argv:%s replyv:%s", requestId, requestSq, method, jsonArgv, jsonReplyv)
-		logger.Info(successStr)
+	var jsonArgv []byte
+	if raw, ok := args.([]byte); ok {
+		jsonArgv = raw
+	} else {
+		jsonArgv, _ = json.Marshal(args)
 	}
+
+	jsonReplyv, _ := json.Marshal(reply)
+	successStr := fmt.Sprintf("[grpcclient] request success requestId:%s requestSq:%s methodName:%s argv:%s replyv:%s", requestId, requestSq, method, jsonArgv, jsonReplyv)
+	logger.Info(successStr)
 
 	return grr
 }
 
-func (ccc *CustomClientConn) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (ccc *customClient) NewStream(ctx context.Context, desc *grpc.StreamDesc, service, endpoint string, opts ...grpc.CallOption) (grpcx.ClientStream, error) {
+	method := methodToGRPC(service, endpoint)
 	header := make(map[string]string)
 
 	if md, ok := metadata.FromContext(ctx); ok {
@@ -191,14 +207,11 @@ func (ccc *CustomClientConn) NewStream(ctx context.Context, desc *grpc.StreamDes
 	} else {
 		header["request_sq"] = "0"
 	}
-	// set timeout in nanoseconds
-	header["timeout"] = fmt.Sprintf("%d", DefaultRequestTimeout)
 	// set the content type for the request
 	header["x-content-type"] = xContentType
 	md := gmetadata.New(header)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)
 
-	logger.Infof("xContentType=%s", xContentType)
 	cf, ok := codec.DefaultGRPCCodecs[xContentType]
 	if !ok {
 		return nil, neterrors.BadRequest("[grpcclient] codec not found")
@@ -233,146 +246,31 @@ func (ccc *CustomClientConn) NewStream(ctx context.Context, desc *grpc.StreamDes
 		return nil, neterrors.BadRequest(fmt.Sprintf("Error creating stream: %v", err))
 	}
 
-	// stream := &grpcStream{
-	// 	ClientStream: st,
-	// 	context:      ctx,
-	// 	conn:         cc,
-	// 	close: func(err error) {
-	// 		// cancel the context if an error occured
-	// 		if err != nil {
-	// 			cancel()
-	// 		}
-	// 		// defer execution of release
-	// 		ccc.pool.release(ccc.addr, cc, err)
-	// 	},
-	// }
+	stream := &grpcStream{
+		ClientStream: st,
+		context:      ctx,
+		conn:         cc,
+		close: func(err error) {
+			if err != nil {
+				cancel()
+			}
 
-	return st, nil
+			logger.Infof("===============close err:%v", err)
+			ccc.pool.release(ccc.addr, cc, err)
+		},
+	}
+
+	return stream, nil
 }
-
-// func (g *grpcClient) stream(ctx context.Context, addr string, req client.Request, rsp interface{}, opts client.CallOptions) error {
-// 	var header map[string]string
-
-// 	if md, ok := metadata.FromContext(ctx); ok {
-// 		header = make(map[string]string, len(md))
-// 		for k, v := range md {
-// 			header[k] = v
-// 		}
-// 	} else {
-// 		header = make(map[string]string)
-// 	}
-
-// 	// set timeout in nanoseconds
-// 	if opts.StreamTimeout > time.Duration(0) {
-// 		header["timeout"] = fmt.Sprintf("%d", opts.StreamTimeout)
-// 	}
-// 	// set the content type for the request
-// 	header["x-content-type"] = req.ContentType()
-
-// 	md := gmetadata.New(header)
-// 	ctx = gmetadata.NewOutgoingContext(ctx, md)
-
-// 	cf, err := g.newGRPCCodec(req.ContentType())
-// 	if err != nil {
-// 		return errors.InternalServerError("go.micro.client", err.Error())
-// 	}
-
-// 	maxRecvMsgSize := g.maxRecvMsgSizeValue()
-// 	maxSendMsgSize := g.maxSendMsgSizeValue()
-
-// 	grpcDialOptions := []grpc.DialOption{
-// 		grpc.WithTimeout(opts.DialTimeout),
-// 		g.secure(addr),
-// 		grpc.WithDefaultCallOptions(
-// 			grpc.MaxCallRecvMsgSize(maxRecvMsgSize),
-// 			grpc.MaxCallSendMsgSize(maxSendMsgSize),
-// 		),
-// 	}
-
-// 	if opts := g.getGrpcDialOptions(); opts != nil {
-// 		grpcDialOptions = append(grpcDialOptions, opts...)
-// 	}
-
-// 	cc, err := g.pool.getConn(addr, grpcDialOptions...)
-// 	if err != nil {
-// 		return errors.InternalServerError("go.micro.client", fmt.Sprintf("Error sending request: %v", err))
-// 	}
-
-// 	desc := &grpc.StreamDesc{
-// 		StreamName:    req.Service() + req.Endpoint(),
-// 		ClientStreams: true,
-// 		ServerStreams: true,
-// 	}
-
-// 	grpcCallOptions := []grpc.CallOption{
-// 		grpc.ForceCodec(cf),
-// 		grpc.CallContentSubtype(cf.Name()),
-// 	}
-// 	if opts := g.getGrpcCallOptions(); opts != nil {
-// 		grpcCallOptions = append(grpcCallOptions, opts...)
-// 	}
-
-// 	var cancel context.CancelFunc
-// 	ctx, cancel = context.WithCancel(ctx)
-
-// 	st, err := cc.NewStream(ctx, desc, methodToGRPC(req.Service(), req.Endpoint()), grpcCallOptions...)
-// 	if err != nil {
-// 		// we need to cleanup as we dialled and created a context
-// 		// cancel the context
-// 		cancel()
-// 		// release the connection
-// 		g.pool.release(addr, cc, err)
-// 		// now return the error
-// 		return errors.InternalServerError("go.micro.client", fmt.Sprintf("Error creating stream: %v", err))
-// 	}
-
-// 	codec := &grpcCodec{
-// 		s: st,
-// 		c: wc,
-// 	}
-
-// 	// set request codec
-// 	if r, ok := req.(*grpcRequest); ok {
-// 		r.codec = codec
-// 	}
-
-// 	// setup the stream response
-// 	stream := &grpcStream{
-// 		ClientStream: st,
-// 		context:      ctx,
-// 		request:      req,
-// 		response: &response{
-// 			conn:   cc,
-// 			stream: st,
-// 			codec:  cf,
-// 			gcodec: codec,
-// 		},
-// 		conn: cc,
-// 		close: func(err error) {
-// 			// cancel the context if an error occured
-// 			if err != nil {
-// 				cancel()
-// 			}
-
-// 			// defer execution of release
-// 			g.pool.release(addr, cc, err)
-// 		},
-// 	}
-
-// 	// set the stream as the response
-// 	val := reflect.ValueOf(rsp).Elem()
-// 	val.Set(reflect.ValueOf(stream).Elem())
-// 	return nil
-// }
 
 func DelConnClient(addr string) {
 	addr2conn.Delete(addr)
 }
 
-func GetConnClient(addr string) *CustomClientConn {
+func GetConnClient(addr string) grpcx.Client {
 	iccc, ok := addr2conn.Load(addr)
 	if ok {
-		return iccc.(*CustomClientConn)
+		return iccc.(*customClient)
 	}
 
 	mutex.Lock()
@@ -380,11 +278,11 @@ func GetConnClient(addr string) *CustomClientConn {
 	//double check
 	iccc, ok = addr2conn.Load(addr)
 	if ok {
-		return iccc.(*CustomClientConn)
+		return iccc.(*customClient)
 	}
-	pool := newPool(100, time.Minute, 50, 20)
+	pool := newPool(DefaultPoolSize, DefaultPoolTTL, DefaultPoolMaxIdle, DefaultPoolMaxStreams)
 
-	ccc := &CustomClientConn{
+	ccc := &customClient{
 		pool: pool,
 		addr: addr,
 	}

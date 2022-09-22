@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"github.com/visonlv/go-vkit/config"
 	"github.com/visonlv/go-vkit/logger"
 )
 
@@ -13,25 +12,19 @@ type NatsClient struct {
 	conn *nats.Conn
 }
 
-func NewDefault() *NatsClient {
-	url := config.GetString("mq.nats.url")
-	username := config.GetString("mq.nats.username")
-	password := config.GetString("mq.nats.password")
-	return NewClient(url, username, password)
-}
-
-func NewClient(url, user, password string) *NatsClient {
+func NewClient(url, user, password string) (*NatsClient, error) {
 	conn, err := nats.Connect(url, nats.UserInfo(user, password), nats.Timeout(3*time.Second))
 	if err != nil {
-		panic(err)
+		logger.Errorf("[natsx] NewClient fail:%s url:%s user:%s password:%s", err.Error(), url, user, password)
+		return nil, err
 	}
 
 	nc := &NatsClient{
 		conn: conn,
 	}
 
-	logger.Infof("[nats] url:%s user:%s password:%s init success", url, user, password)
-	return nc
+	logger.Infof("[natsx] NewClient success url:%s user:%s password:%s", url, user, password)
+	return nc, nil
 }
 
 func (the *NatsClient) GetClient() *nats.Conn {

@@ -2,6 +2,8 @@ package mysqlx
 
 import (
 	"errors"
+
+	"gorm.io/gorm"
 )
 
 //支持批量插入
@@ -22,9 +24,6 @@ func (the *MysqlClient) InsertBatch(o interface{}, batchSize int) error {
 	if result.Error != nil {
 		return result.Error
 	}
-	if result.RowsAffected <= 0 {
-		return errors.New("InsertMany RowsAffected<=0")
-	}
 	return nil
 }
 
@@ -33,9 +32,6 @@ func (the *MysqlClient) DeleteById(o interface{}, id string) (bool, error) {
 	if result.Error != nil {
 		return false, result.Error
 	}
-	if result.RowsAffected <= 0 {
-		return false, nil
-	}
 	return true, nil
 }
 
@@ -43,6 +39,9 @@ func (the *MysqlClient) DeleteById(o interface{}, id string) (bool, error) {
 func (the *MysqlClient) Delete(o interface{}) (bool, error) {
 	result := the.db.Delete(o)
 	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return false, nil
+		}
 		return false, result.Error
 	}
 	if result.RowsAffected <= 0 {
@@ -55,10 +54,10 @@ func (the *MysqlClient) Delete(o interface{}) (bool, error) {
 func (the *MysqlClient) FindById(o interface{}, id string) (bool, error) {
 	result := the.db.First(o, "id = ?", id)
 	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return false, nil
+		}
 		return false, result.Error
-	}
-	if result.RowsAffected <= 0 {
-		return true, nil
 	}
 	return true, nil
 }
@@ -75,7 +74,8 @@ func (the *MysqlClient) FindPage(page int32, size int32, o interface{}, count *i
 	limit := int64(size)
 
 	var count64 int64
-	the.Count(&count64)                                       //总行数
+	the.Count(&count64) //总行数
+	*count = int32(count64)
 	result := the.Offset(int(skip)).Limit(int(limit)).Find(o) //查询pageindex页的数据
 
 	if result.db.Error != nil {
@@ -95,10 +95,10 @@ func (the *MysqlClient) FindList(o interface{}) error {
 func (the *MysqlClient) FindFirst(o interface{}) (bool, error) {
 	result := the.db.First(o)
 	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return false, nil
+		}
 		return false, result.Error
-	}
-	if result.RowsAffected <= 0 {
-		return false, nil
 	}
 	return true, nil
 }
@@ -110,4 +110,16 @@ func (the *MysqlClient) Update(o interface{}) error {
 		return result.Error
 	}
 	return nil
+}
+
+//是否存在
+func (the *MysqlClient) Exists(o interface{}) (bool, error) {
+	result := the.db.First(o)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return false, nil
+		}
+		return false, result.Error
+	}
+	return true, nil
 }

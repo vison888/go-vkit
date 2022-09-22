@@ -16,13 +16,15 @@ import (
 	"time"
 
 	"github.com/visonlv/go-vkit/codec"
-	cerrors "github.com/visonlv/go-vkit/errors"
-	"github.com/visonlv/go-vkit/errors/neterrors"
+	cerrors "github.com/visonlv/go-vkit/errorsx"
+	"github.com/visonlv/go-vkit/errorsx/neterrors"
+	"github.com/visonlv/go-vkit/grpcx"
 	"github.com/visonlv/go-vkit/logger"
 	"google.golang.org/grpc/encoding"
 )
 
 type authFunc func(w http.ResponseWriter, r *http.Request) bool
+type filterFunc func(w http.ResponseWriter, r *http.Request, b []byte) ([]byte, error)
 
 type handlerInfo struct {
 	handler      reflect.Value
@@ -35,7 +37,9 @@ type handlerInfo struct {
 
 type Handler struct {
 	sync.RWMutex
-	handlers map[string]*handlerInfo
+	handlers   map[string]*handlerInfo
+	authFunc   authFunc
+	filterFunc filterFunc
 }
 
 func NewHandler() *Handler {
@@ -43,6 +47,14 @@ func NewHandler() *Handler {
 		handlers: make(map[string]*handlerInfo),
 	}
 	return g
+}
+
+func (h *Handler) WithAuthFunc(f authFunc) {
+	h.authFunc = f
+}
+
+func (h *Handler) WithFilterFunc(f filterFunc) {
+	h.filterFunc = f
 }
 
 func errorResponse(w http.ResponseWriter, r *http.Request, _err error) {
@@ -113,9 +125,13 @@ func requestPayload(r *http.Request) (bytes []byte, err error) {
 	}
 }
 
-func (g *Handler) RegisterList(list []interface{}, urls map[string][]string) (err error) {
+func (h *Handler) RegisterApiEndpoint(list []interface{}, apiEndpointList []*grpcx.ApiEndpoint) (err error) {
+	apiEndpointMap := make(map[string]*grpcx.ApiEndpoint, 0)
+	for _, v := range apiEndpointList {
+		apiEndpointMap[v.Method] = v
+	}
 	for _, v := range list {
-		err := g.RegisterWithUrl(v, urls)
+		err := h.RegisterWithUrl(v, apiEndpointMap)
 		if err != nil {
 			return err
 		}
@@ -123,7 +139,7 @@ func (g *Handler) RegisterList(list []interface{}, urls map[string][]string) (er
 	return nil
 }
 
-func (g *Handler) RegisterWithUrl(i interface{}, urls map[string][]string) (err error) {
+func (h *Handler) RegisterWithUrl(i interface{}, apiEndpointMap map[string]*grpcx.ApiEndpoint) (err error) {
 	o := reflect.ValueOf(i)
 	hType := o.Type()
 	hName := hType.Elem().Name()
@@ -131,37 +147,55 @@ func (g *Handler) RegisterWithUrl(i interface{}, urls map[string][]string) (err 
 	//反射方法
 	for i := 0; i < mCount; i++ {
 		m := hType.Method(i)
-		pType1 := m.Type.In(2)
-		pType2 := m.Type.In(3)
-		handler := &handlerInfo{
-			handler:  o,
-			method:   m,
-			reqType:  pType1,
-			respType: pType2,
-		}
 		methodName := hName + "." + m.Name
 		reqUrl := methodName
-		if urls != nil {
-			desc, b := urls[methodName]
-			if b {
-				reqUrl = desc[0]
-				clientStream, _ := strconv.ParseBool(desc[1])
-				serverStream, _ := strconv.ParseBool(desc[2])
-				handler.clientStream = clientStream
-				handler.serverStream = serverStream
+		reqMethod := ""
+		clientStream := false
+		serverStream := false
+		if apiEndpointMap != nil {
+			desc, b := apiEndpointMap[methodName]
+			if !b {
+				continue
 			}
+			reqUrl = desc.Url
+			clientStream = desc.ClientStream
+			serverStream = desc.ServerStream
+			reqMethod = desc.Method
 		}
-		g.handlers[reqUrl] = handler
-		logger.Infof("[grpcServer] Register methodName:%v reqUrl:%s", methodName, reqUrl)
+		var reqType reflect.Type
+		var respType reflect.Type
+		if m.Type.NumIn() == 3 {
+			respType = m.Type.In(2)
+		} else if m.Type.NumIn() == 4 {
+			reqType = m.Type.In(2)
+			respType = m.Type.In(3)
+		} else {
+			panic("in param numbre error methodName:=" + methodName)
+		}
+
+		handler := &handlerInfo{
+			handler:      o,
+			method:       m,
+			reqType:      reqType,
+			respType:     respType,
+			clientStream: clientStream,
+			serverStream: serverStream,
+		}
+
+		h.handlers[reqUrl] = handler
+		if reqMethod != "" {
+			h.handlers[reqMethod] = handler
+		}
+		logger.Infof("[httphandler] Register reqUrl:%s reqMethod:%s", reqUrl, reqMethod)
 	}
 	return nil
 }
 
-func (g *Handler) Register(i interface{}) (err error) {
-	return g.RegisterWithUrl(i, nil)
+func (h *Handler) Register(i interface{}) (err error) {
+	return h.RegisterWithUrl(i, nil)
 }
 
-func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, authCheck authFunc) {
+func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if re := recover(); re != nil {
 			errorStr := fmt.Sprintf("[httphandler] panic recovered:%v ", re)
@@ -182,10 +216,12 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, authCheck authF
 		return
 	}
 
-	if !authCheck(w, r) {
-		errorStr := fmt.Sprintf("[httphandler] check token fail url:%s", r.RequestURI)
-		errorResponse(w, r, neterrors.BadRequest(errorStr))
-		return
+	if h.authFunc != nil {
+		if !h.authFunc(w, r) {
+			errorStr := fmt.Sprintf("[httphandler] check token fail url:%s", r.RequestURI)
+			errorResponse(w, r, neterrors.BadRequest(errorStr))
+			return
+		}
 	}
 
 	reqBytes, err := requestPayload(r)
@@ -193,6 +229,16 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, authCheck authF
 		errorStr := fmt.Sprintf("[httphandler] %s url:%s", err.Error(), r.RequestURI)
 		errorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
+	}
+
+	if h.filterFunc != nil {
+		newB, err := h.filterFunc(w, r, reqBytes)
+		if err != nil {
+			errorStr := fmt.Sprintf("[httphandler] filter data fail url:%s", r.RequestURI)
+			errorResponse(w, r, neterrors.BadRequest(errorStr))
+			return
+		}
+		reqBytes = newB
 	}
 
 	readCt := r.Header.Get("Content-Type")
@@ -220,9 +266,9 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, authCheck authF
 		return
 	}
 
-	hi, b := h.handlers[r.RequestURI]
+	hi, b := h.handlers[endpoint]
 	if !b {
-		errorStr := fmt.Sprintf("[httphandler] unknown method %s", r.RequestURI)
+		errorStr := fmt.Sprintf("[httphandler] unknown method %s", endpoint)
 		errorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
@@ -270,7 +316,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, authCheck authF
 			if verr.Code != 0 {
 				errorStr := fmt.Sprintf("[httphandler] call error: %s", verr.Error())
 				logger.Errorf(errorStr)
-				errorResponse(w, r, neterrors.BusinessError(verr.GetFullCode(), verr.Msg))
+				errorResponse(w, r, neterrors.BusinessError(verr.Code, verr.Msg))
 				return
 			}
 		} else {
@@ -301,9 +347,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request, authCheck authF
 		return
 	}
 
-	if logger.CanServerLog(readCt) {
-		successStr := fmt.Sprintf("[httphandler] success cost:[%v] url:[%v] req:[%v] resp:[%v]", costTime.Milliseconds(), r.RequestURI, string(reqBytes), string(respBytes))
-		logger.Infof(successStr)
-	}
+	successStr := fmt.Sprintf("[httphandler] success cost:[%v] url:[%v] req:[%v] resp:[%v]", costTime.Milliseconds(), r.RequestURI, string(reqBytes), string(respBytes))
+	logger.Infof(successStr)
 
 }

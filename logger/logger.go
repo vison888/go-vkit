@@ -18,7 +18,6 @@ const (
 	FileMaxLine = 65536
 )
 
-// Level 日志输出级别。
 type Level int32
 
 func (level Level) String() string {
@@ -43,11 +42,12 @@ var (
 	podInfo  string
 	logDir   string
 
-	mutex     sync.Mutex
-	stdWrite  io.Writer
-	logFile   *os.File
-	outputBuf []byte
-	lineCount int32
+	mutex         sync.Mutex
+	stdWrite      io.Writer
+	logFile       *os.File
+	outputBuf     []byte
+	lineCount     int32
+	createFileDay int32
 )
 
 func getSystemEnvAndCmdArg() map[string]string {
@@ -110,9 +110,10 @@ func init() {
 
 //logs/appname/podname.time.log
 func tryNewFile(force bool) {
-	if lineCount > FileMaxLine || force {
+	// 日期不一样或者行数达到上限
+	if lineCount > FileMaxLine || createFileDay != int32(time.Now().YearDay()) || force {
 		// builf file path
-		timeStr := time.Now().Format("2006-01-02-15:04:05")
+		timeStr := time.Now().Format("20060102150405")
 		fileDir := fmt.Sprintf("%s%s", logDir, appName)
 		filePath := fmt.Sprintf("%s/%s.%s.log", fileDir, podName, timeStr)
 		//try create dir
@@ -121,18 +122,17 @@ func tryNewFile(force bool) {
 			if os.IsNotExist(err) {
 				err = os.MkdirAll(fileDir, os.ModePerm)
 				if err != nil {
-					fmt.Println("create forder fail fileDir=:" + fileDir)
-					return
+					panic(fmt.Sprintf("create forder fail fileDir=:%s err:%s", fileDir, err))
 				}
 			}
 		}
 		// new file
 		file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
-			fmt.Println("open log file failed, err:", err)
-			return
+			panic(fmt.Sprintf("open log file failed, err:%s", err))
 		}
 		lineCount = 0
+		createFileDay = int32(time.Now().YearDay())
 		if logFile != nil {
 			logFile.Close()
 		}
@@ -180,20 +180,20 @@ func Debugf(format string, v ...interface{}) {
 	formatAndWrite(DebugLevel, format, v...)
 }
 
-func Info(format string, v ...interface{}) {
-	Infof(format, v...)
+func Info(v ...interface{}) {
+	Infof(fmt.Sprint(v...))
 }
 
-func Warn(format string, v ...interface{}) {
-	Warnf(format, v...)
+func Warn(v ...interface{}) {
+	Warnf(fmt.Sprint(v...))
 }
 
-func Error(format string, v ...interface{}) {
-	Errorf(format, v...)
+func Error(v ...interface{}) {
+	Errorf(fmt.Sprint(v...))
 }
 
-func Debug(format string, v ...interface{}) {
-	Debugf(format, v...)
+func Debug(v ...interface{}) {
+	Debugf(fmt.Sprint(v...))
 }
 
 func JsonInfo(format string, v interface{}) {
@@ -204,8 +204,4 @@ func JsonInfo(format string, v interface{}) {
 	}
 
 	Debugf(format, string(bb))
-}
-
-func CanServerLog(xct string) bool {
-	return !strings.Contains(xct, "multipart/form-data")
 }

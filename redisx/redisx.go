@@ -3,13 +3,14 @@ package redisx
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/visonlv/go-vkit/config"
 	"github.com/visonlv/go-vkit/logger"
 )
 
+// redis.Nil
 type RedisClient struct {
 	c *redis.Client
 }
@@ -19,13 +20,10 @@ type RedisKey struct {
 	Expire time.Duration
 }
 
-func NewDefault() *RedisClient {
-	addr := config.GetString("database.redis.addr")
-	password := config.GetString("database.redis.password")
-	db := config.GetInt("database.redis.db")
+func NewClient(addr, password string, db int) (*RedisClient, error) {
 	if addr == "" || password == "" {
-		logger.Errorf("[redis] addr:%s password:%s db:%d has empty", addr, password, db)
-		panic("pamar error")
+		logger.Errorf("[redis] NewClient fail:pamar error addr:%s password:%s db:%d ", addr, password, db)
+		return nil, errors.New("pamar error")
 	}
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
@@ -35,12 +33,12 @@ func NewDefault() *RedisClient {
 
 	_, err := rdb.Ping(context.Background()).Result()
 	if err != nil {
-		logger.Errorf("[redis] ping fail err:%s", err)
-		panic(err)
+		logger.Errorf("[redis] NewClient fail:%s addr:%s password:%s db:%d ", err.Error(), addr, password, db)
+		return nil, err
 	}
 
-	logger.Infof("[redis] addr:%s password:%s db:%d init success", addr, password, db)
-	return &RedisClient{c: rdb}
+	logger.Infof("[redis] NewClient success addr:%s password:%s db:%d ", addr, password, db)
+	return &RedisClient{c: rdb}, nil
 }
 
 func GetFullKey(key *RedisKey, sub string) string {
@@ -54,6 +52,11 @@ func GetFullKey(key *RedisKey, sub string) string {
 func (c *RedisClient) Set(key *RedisKey, sub string, value interface{}) error {
 	fullKey := GetFullKey(key, sub)
 	return c.c.Set(context.Background(), fullKey, value, key.Expire).Err()
+}
+
+func (c *RedisClient) Del(key *RedisKey, sub string) error {
+	fullKey := GetFullKey(key, sub)
+	return c.c.Del(context.Background(), fullKey).Err()
 }
 
 func (c *RedisClient) SetJson(key *RedisKey, sub string, value interface{}) error {
