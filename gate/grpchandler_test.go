@@ -92,21 +92,19 @@ func TestAuth(t *testing.T) {
 	}
 
 	go startGrpcServer()
-	customHandler := NewHttpHandler(
+	customHandler := NewGrpcHandler(
 		HttpGrpcPort(10000),
 		HttpAuthHandler(tokenCheck))
 
 	http.HandleFunc("/rpc/", func(w http.ResponseWriter, r *http.Request) {
 		customHandler.Handle(w, r)
 	})
-	go func() {
-		err := http.ListenAndServe("0.0.0.0:8080", nil)
-		if err != nil {
-			logger.Infof("start server fail, err:%s", err)
-		} else {
-			logger.Infof("start server success")
-		}
-	}()
+	err := http.ListenAndServe("0.0.0.0:8080", nil)
+	if err != nil {
+		logger.Infof("start server fail, err:%s", err)
+	} else {
+		logger.Infof("start server success")
+	}
 
 	type args struct {
 		token  string
@@ -162,7 +160,7 @@ func TestWrapHandler(t *testing.T) {
 		}
 	}
 
-	customHandler := NewHttpHandler(
+	customHandler := NewGrpcHandler(
 		HttpWrapHandler(handler1),
 		HttpWrapHandler(handler2),
 		HttpGrpcPort(10000))
@@ -226,7 +224,7 @@ func TestLog(t *testing.T) {
 		}
 	}
 
-	customHandler := NewHttpHandler(
+	customHandler := NewGrpcHandler(
 		HttpWrapHandler(handler1),
 		HttpGrpcPort(10000))
 
@@ -289,7 +287,7 @@ func TestTraceLog(t *testing.T) {
 		}
 	}
 
-	customHandler := NewHttpHandler(
+	customHandler := NewGrpcHandler(
 		HttpWrapHandler(handler1),
 		HttpGrpcPort(10000))
 

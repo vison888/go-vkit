@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -17,17 +16,16 @@ import (
 	"github.com/visonlv/go-vkit/logger"
 	meta "github.com/visonlv/go-vkit/metadata"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 const (
-	pingPeriod     = 60 * time.Second
-	maxMessageSize = 1024 * 1024 * 4
+	DefaultWsPingPeriod     = 60 * time.Second
+	DefaultWsMaxMessageSize = 1024 * 1024 * 4
 )
 
 var (
-	upgrader = websocket.Upgrader{
+	DefaultUpgrader = &websocket.Upgrader{
 		//设置读缓冲区
 		ReadBufferSize: 1024,
 		//设置写缓冲区
@@ -41,9 +39,20 @@ var (
 	}
 )
 
-type WsHandler struct {
-	auth     authFunc
-	grpcPort int
+type StreamHandler struct {
+	opts HttpOptions
+}
+
+func NewStreamHandler(opts ...HttpOption) *StreamHandler {
+	return &StreamHandler{
+		opts: newHttpOptions(opts...),
+	}
+}
+
+func (h *StreamHandler) Init(opts ...HttpOption) {
+	for _, o := range opts {
+		o(&h.opts)
+	}
 }
 
 type StreamContext struct {
@@ -57,49 +66,47 @@ type StreamContext struct {
 	isClose   bool
 }
 
-func NewWsHandler(grpcPort int, auth authFunc) *WsHandler {
-	return &WsHandler{
-		grpcPort: grpcPort,
-		auth:     auth,
-	}
-}
-
-func (h *WsHandler) Handle(w http.ResponseWriter, r *http.Request) {
+func (h *StreamHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if re := recover(); re != nil {
-			errorStr := fmt.Sprintf("[gate] WsHandler panic recovered:%v ", re)
-			logger.Errorf(errorStr)
-			logger.Error(string(debug.Stack()))
-			ErrorResponse(w, r, neterrors.BadRequest(errorStr))
+			if re := recover(); re != nil {
+				if h.opts.ErrHandler != nil {
+					h.opts.ErrHandler(w, r, re)
+				}
+			}
 		}
 	}()
 
-	if cerr := h.auth(w, r); cerr != nil {
-		logger.Errorf("[gate] WsHandler authCheck Err url:%s err:%s", r.RequestURI, cerr.Error())
-		ErrorResponse(w, r, cerr)
-		return
+	// 鉴权
+	if h.opts.AuthHandler != nil {
+		if cerr := h.opts.AuthHandler(w, r); cerr != nil {
+			ErrorResponse(w, r, cerr)
+			return
+		}
 	}
 
-	conn, err := upgrader.Upgrade(w, r, r.Header)
+	conn, err := h.opts.WsUpgrader.Upgrade(w, r, r.Header)
 	if err != nil {
-		logger.Errorf("[gate] WsHandler Upgrade Err url:%s err:%s", r.RequestURI, err)
+		logger.Errorf("[gate] StreamHandler Upgrade Err url:%s err:%s", r.RequestURI, err)
 		ErrorResponse(w, r, neterrors.Forbidden(err.Error()))
 		return
 	}
 	defer conn.Close()
 
-	readCt := "application/json"
+	readCt := r.Header.Get("Content-Type")
+	index := strings.Index(readCt, ";")
+	if index != -1 {
+		readCt = readCt[:index]
+	}
 
 	if strings.ToLower(readCt) != "application/json" {
-		logger.Errorf("[gate] WsHandler url:%s content-type not application/json", r.RequestURI)
+		logger.Errorf("[gate] StreamHandler url:%s content-type not application/json", r.RequestURI)
 		ErrorResponse(w, r, neterrors.Forbidden("content-type not application/json"))
 	}
 
 	// 将header转context
-	requestId := strings.ReplaceAll(uuid.New().String(), "-", "")
 	md := meta.Metadata{}
 	md["x-content-type"] = readCt
-	md["request_id"] = requestId
 	for k, v := range r.Header {
 		if k == "Connection" {
 			continue
@@ -126,7 +133,7 @@ func (h *WsHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	h.readsAndWrites(sc)
 }
 
-func (h *WsHandler) Close(sc *StreamContext) {
+func (h *StreamHandler) Close(sc *StreamContext) {
 	if sc.isClose {
 		return
 	}
@@ -143,7 +150,7 @@ func (h *WsHandler) Close(sc *StreamContext) {
 	sc.stream.Close()
 }
 
-func (h *WsHandler) connectGrpcServer(sc *StreamContext, w http.ResponseWriter, r *http.Request) error {
+func (h *StreamHandler) connectGrpcServer(sc *StreamContext, w http.ResponseWriter, r *http.Request) error {
 	var service, endpoint string
 	path := strings.Split(r.RequestURI, "/")
 	if len(path) > 3 {
@@ -160,7 +167,7 @@ func (h *WsHandler) connectGrpcServer(sc *StreamContext, w http.ResponseWriter, 
 	}
 
 	// 连接grpc服务
-	target := fmt.Sprintf("%s:%d", service, h.grpcPort)
+	target := fmt.Sprintf("%s:%d", service, h.opts.GrpcPort)
 	stream, netErr := grpcclient.StreamByGate(sc.ctx, target, service, endpoint)
 	if netErr != nil {
 		return fmt.Errorf("StreamByGate fail:%s", netErr.Error())
@@ -169,7 +176,7 @@ func (h *WsHandler) connectGrpcServer(sc *StreamContext, w http.ResponseWriter, 
 	return nil
 }
 
-func (h *WsHandler) readsAndWrites(sc *StreamContext) {
+func (h *StreamHandler) readsAndWrites(sc *StreamContext) {
 	stopWsCtx, wsCancel := context.WithCancel(context.Background())
 	stopGrpcCtx, grpcCancel := context.WithCancel(context.Background())
 
@@ -183,14 +190,14 @@ func (h *WsHandler) readsAndWrites(sc *StreamContext) {
 	wg.Wait()
 }
 
-func (h *WsHandler) wsRead(stopCtx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, sc *StreamContext) {
+func (h *StreamHandler) wsRead(stopCtx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, sc *StreamContext) {
 	defer func() {
 		cancel()
 		wg.Done()
 		h.Close(sc)
 		logger.Info("defer wsRead")
 	}()
-	sc.conn.SetReadLimit(maxMessageSize)
+	sc.conn.SetReadLimit(int64(h.opts.WsMaxMessageSize))
 
 	for {
 		select {
@@ -201,26 +208,26 @@ func (h *WsHandler) wsRead(stopCtx context.Context, cancel context.CancelFunc, w
 
 		mt, msg, err := sc.conn.ReadMessage()
 		if err != nil {
-			logger.Errorf("[gate] WsHandler wsRead err: %+v", err)
+			logger.Errorf("[gate] StreamHandler wsRead err: %+v", err)
 			return
 		}
 
 		if mt == websocket.BinaryMessage {
-			logger.Errorf("[gate] WsHandler wsRead not support websocket.BinaryMessage mt: %d", mt)
+			logger.Errorf("[gate] StreamHandler wsRead not support websocket.BinaryMessage mt: %d", mt)
 			return
 		}
 		sc.wsReadCh <- msg
 	}
 }
 
-func (h *WsHandler) wsWrite(stopCtx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, sc *StreamContext) {
+func (h *StreamHandler) wsWrite(stopCtx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, sc *StreamContext) {
 	defer func() {
 		cancel()
 		wg.Done()
 		h.Close(sc)
 		logger.Info("defer wsWrite")
 	}()
-	ticker := time.NewTicker(pingPeriod)
+	ticker := time.NewTicker(h.opts.WsPingPeriod)
 	defer ticker.Stop()
 	for {
 		select {
@@ -232,25 +239,25 @@ func (h *WsHandler) wsWrite(stopCtx context.Context, cancel context.CancelFunc, 
 			return
 		case <-ticker.C:
 			if err := sc.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				logger.Errorf("[gate] WsHandler wsWrite conn.WriteMessage err: %+v", err)
+				logger.Errorf("[gate] StreamHandler wsWrite conn.WriteMessage err: %+v", err)
 				return
 			}
 		case msg := <-sc.wsWriteCh:
 			respBytes, err := msg.MarshalJSON()
 			if err != nil {
-				logger.Errorf("[gate] WsHandler wsWrite msg.MarshalJSON err: %+v", err)
+				logger.Errorf("[gate] StreamHandler wsWrite msg.MarshalJSON err: %+v", err)
 				return
 			}
 
 			if err := sc.conn.WriteMessage(websocket.TextMessage, respBytes); err != nil {
-				logger.Errorf("[gate] WsHandler wsWrite conn.WriteMessage err: %+v", err)
+				logger.Errorf("[gate] StreamHandler wsWrite conn.WriteMessage err: %+v", err)
 				return
 			}
 		}
 	}
 }
 
-func (h *WsHandler) grpcWrite(stopCtx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, sc *StreamContext) {
+func (h *StreamHandler) grpcWrite(stopCtx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, sc *StreamContext) {
 	defer func() {
 		cancel()
 		wg.Done()
@@ -264,14 +271,14 @@ func (h *WsHandler) grpcWrite(stopCtx context.Context, cancel context.CancelFunc
 			return
 		case msg := <-sc.wsReadCh:
 			if err := sc.stream.Send(msg); err != nil {
-				logger.Errorf("[gate] WsHandler grpcWrite stream.Send err: %+v", err)
+				logger.Errorf("[gate] StreamHandler grpcWrite stream.Send err: %+v", err)
 				return
 			}
 		}
 	}
 }
 
-func (h *WsHandler) grpcRead(stopCtx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, sc *StreamContext) {
+func (h *StreamHandler) grpcRead(stopCtx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, sc *StreamContext) {
 	defer func() {
 		cancel()
 		wg.Done()
@@ -289,7 +296,7 @@ func (h *WsHandler) grpcRead(stopCtx context.Context, cancel context.CancelFunc,
 		data := &json.RawMessage{}
 		err := sc.stream.Recv(data)
 		if err != nil {
-			logger.Errorf("[gate] WsHandler grpcRead stream.Recv err: %+v", err)
+			logger.Errorf("[gate] StreamHandler grpcRead stream.Recv err: %+v", err)
 			return
 		}
 		sc.wsWriteCh <- data

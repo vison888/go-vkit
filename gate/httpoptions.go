@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/visonlv/go-vkit/errorsx/neterrors"
 	"github.com/visonlv/go-vkit/logger"
 )
@@ -16,7 +18,7 @@ type HandlerWrapper func(HandlerFunc) HandlerFunc
 var (
 	DefaultGrpcPort   = 10000
 	DefaultErrHandler = func(w http.ResponseWriter, r *http.Request, err interface{}) {
-		errorStr := fmt.Sprintf("[gate] HttpHandler panic recovered:%v ", err)
+		errorStr := fmt.Sprintf("[gate] panic recovered:%v ", err)
 		logger.Errorf(errorStr)
 		logger.Error(string(debug.Stack()))
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
@@ -28,15 +30,22 @@ type HttpOptions struct {
 	ErrHandler   func(w http.ResponseWriter, r *http.Request, err interface{})
 	AuthHandler  func(w http.ResponseWriter, r *http.Request) error
 	HdlrWrappers []HandlerWrapper
+	// ws
+	WsUpgrader       *websocket.Upgrader
+	WsPingPeriod     time.Duration
+	WsMaxMessageSize int
 }
 
 type HttpOption func(o *HttpOptions)
 
 func newHttpOptions(opts ...HttpOption) HttpOptions {
 	opt := HttpOptions{
-		GrpcPort:     DefaultGrpcPort,
-		ErrHandler:   DefaultErrHandler,
-		HdlrWrappers: make([]HandlerWrapper, 0),
+		GrpcPort:         DefaultGrpcPort,
+		ErrHandler:       DefaultErrHandler,
+		HdlrWrappers:     make([]HandlerWrapper, 0),
+		WsUpgrader:       DefaultUpgrader,
+		WsPingPeriod:     DefaultWsPingPeriod,
+		WsMaxMessageSize: DefaultWsMaxMessageSize,
 	}
 	for _, o := range opts {
 		o(&opt)
@@ -65,5 +74,23 @@ func HttpGrpcPort(port int) HttpOption {
 func HttpAuthHandler(h func(w http.ResponseWriter, r *http.Request) error) HttpOption {
 	return func(o *HttpOptions) {
 		o.AuthHandler = h
+	}
+}
+
+func WsUpgrader(upgrader *websocket.Upgrader) HttpOption {
+	return func(o *HttpOptions) {
+		o.WsUpgrader = upgrader
+	}
+}
+
+func WsPingPeriod(wsPingPeriod time.Duration) HttpOption {
+	return func(o *HttpOptions) {
+		o.WsPingPeriod = wsPingPeriod
+	}
+}
+
+func WsMaxMessageSize(wsMaxMessageSize int) HttpOption {
+	return func(o *HttpOptions) {
+		o.WsMaxMessageSize = wsMaxMessageSize
 	}
 }

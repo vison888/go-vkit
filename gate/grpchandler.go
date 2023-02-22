@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"runtime/debug"
 	"strconv"
 	"strings"
 
@@ -14,29 +13,28 @@ import (
 	meta "github.com/visonlv/go-vkit/metadata"
 )
 
-type HttpHandler struct {
+type GrpcHandler struct {
 	opts HttpOptions
 }
 
-func NewHttpHandler(opts ...HttpOption) *HttpHandler {
-	return &HttpHandler{
+func NewGrpcHandler(opts ...HttpOption) *GrpcHandler {
+	return &GrpcHandler{
 		opts: newHttpOptions(opts...),
 	}
 }
 
-func (h *HttpHandler) Init(opts ...HttpOption) {
+func (h *GrpcHandler) Init(opts ...HttpOption) {
 	for _, o := range opts {
 		o(&h.opts)
 	}
 }
 
-func (h *HttpHandler) Handle(w http.ResponseWriter, r *http.Request) {
+func (h *GrpcHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if re := recover(); re != nil {
-			errorStr := fmt.Sprintf("[gate] HttpHandler panic recovered:%v ", re)
-			logger.Errorf(errorStr)
-			logger.Error(string(debug.Stack()))
-			ErrorResponse(w, r, neterrors.BadRequest(errorStr))
+			if h.opts.ErrHandler != nil {
+				h.opts.ErrHandler(w, r, re)
+			}
 		}
 	}()
 

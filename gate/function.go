@@ -17,8 +17,6 @@ import (
 	meta "github.com/visonlv/go-vkit/metadata"
 )
 
-type authFunc func(w http.ResponseWriter, r *http.Request) error
-
 func ErrorResponse(w http.ResponseWriter, r *http.Request, _err error) {
 	var netErr *neterrors.NetError
 	if verr, ok := _err.(*neterrors.NetError); ok {

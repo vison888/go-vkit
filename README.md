@@ -8,17 +8,16 @@ api统一格式  /前缀/服务名/模块.方法 如:/rpc/speech/AppService.Crea
 1、网关gate  
 2、grpcclient  
 3、grpcserver  
-4、httphandler  
-5、日志  
-6、minio文件系统  
-7、nats消息队列  
-8、mysql数据库  
-9、mongodb数据库  
-10、redis缓存  
-11、错误码规范  
+4、日志  
+5、minio文件系统  
+6、nats消息队列  
+7、mysql数据库  
+8、mongodb数据库  
+9、redis缓存  
+10、错误码规范  
 
 ## 1、网关gate
-网关作为请求的总入口，主要职责是权限验证、协议适配、请求转发。go的框架底层则提供了两个handler，主要负责http/websock协议的处理。
+网关作为请求的总入口，主要职责是权限验证、协议适配、请求转发。go的框架底层则提供了两个handler，主要负责http/websock协议的处理。同时也提供一个单点的http服务，该服务通过放射最终回调到业务层。
 
 http网关代理例子：
 ```
@@ -88,7 +87,7 @@ func startGrpcServer() {
 	svr.Run("0.0.0.0:10000")
 }
 ```
-## 4、httphandler  
+## 4、nativehandler  
 提供一种直接暴露http端口的模块，该模块只支持post协议，内部将post的body通过反射成pb结构，并回调到指定的方法逻辑中。
 
 ```
