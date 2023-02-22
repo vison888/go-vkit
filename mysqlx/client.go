@@ -10,15 +10,14 @@ import (
 )
 
 type MysqlClient struct {
-	db    *gorm.DB // 客户端
-	clone bool     // 是否clone
+	db *gorm.DB // 客户端
 }
 
 func newOnChain(client *MysqlClient, db *gorm.DB) *MysqlClient {
-	if client.clone {
+	if client.db == db {
 		return client
 	}
-	return &MysqlClient{db: db, clone: true}
+	return &MysqlClient{db: db}
 }
 
 func NewClient(uri string, maxConn, maxIdel, maxLifeTime int) (*MysqlClient, error) {

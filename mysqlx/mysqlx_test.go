@@ -97,7 +97,7 @@ func TestUpdate(t *testing.T) {
 	logger.Infof("FindById result :%s", string(bb))
 
 	u.Username = "new ======="
-	err = cc.Update(u)
+	err = cc.UpdateEx(u)
 	if err != nil {
 		logger.Infof("Update fail :%s", err)
 	}
@@ -111,7 +111,7 @@ func TestUpdate(t *testing.T) {
 	u1.Username = "batch -----------------"
 	u2.Username = "batch -----------------"
 	batchUser := []*User{u1, u2}
-	cc.Update(batchUser)
+	cc.UpdateEx(batchUser)
 
 	// users := []interface{}{u1, u2}
 	// cc.UpdateMany( users)

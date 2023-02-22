@@ -107,9 +107,6 @@ func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err err
 	}
 
 	to := md["timeout"]
-	requestSq := md["request_sq"]
-	requestId := md["request_id"]
-
 	xct := DefaultContentType
 
 	if ctype, ok := md["x-content-type"]; ok {
@@ -153,13 +150,13 @@ func (g *grpcServer) handler(srv interface{}, stream grpc.ServerStream) (err err
 	}
 
 	if h.clientStream || h.serverStream {
-		return g.processStream(stream, h, ct, xct, requestId, requestSq, methodName, ctx)
+		return g.processStream(stream, h, ct, xct, methodName, ctx)
 	}
 
-	return g.processRequest(stream, h, ct, xct, requestId, requestSq, methodName, ctx)
+	return g.processRequest(stream, h, ct, xct, methodName, ctx)
 }
 
-func (g *grpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct string, xct string, requestId string, requestSq string, methodName string, ctx context.Context) error {
+func (g *grpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct string, xct string, methodName string, ctx context.Context) error {
 	var argv reflect.Value
 	replyv := reflect.New(h.respType.Elem())
 	if h.reqType != nil {
@@ -202,7 +199,7 @@ func (g *grpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct 
 	return nil
 }
 
-func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct string, xct string, requestId string, requestSq string, methodName string, ctx context.Context) error {
+func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct string, xct string, methodName string, ctx context.Context) error {
 	argv := reflect.New(h.reqType.Elem())
 	replyv := reflect.New(h.respType.Elem())
 
@@ -234,7 +231,7 @@ func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct
 		errValue := out[0]
 		if errValue.Interface() != nil {
 			err := errValue.Interface().(error)
-			errorStr := fmt.Sprintf("[grpcserver] requestId:%s requestSq:%s param error: %s", requestId, requestSq, err.Error())
+			errorStr := fmt.Sprintf("[grpcserver]  param error: %s", err.Error())
 			logger.Errorf(errorStr)
 			return neterrors.BusinessError(-1, errorStr)
 		}
@@ -250,27 +247,27 @@ func (g *grpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct
 		//处理业务异常
 		if verr, ok := rerr.(*errorsx.Errno); ok {
 			if verr.Code != 0 {
-				errorStr := fmt.Sprintf("[grpcserver] requestId:%s requestSq:%s call error: %s", requestId, requestSq, verr.Error())
+				errorStr := fmt.Sprintf("[grpcserver] call error: %s", verr.Error())
 				logger.Errorf(errorStr)
 				return neterrors.BusinessError(verr.Code, verr.Msg)
 			}
 		} else {
 			//其他异常统一包装
-			errorStr := fmt.Sprintf("[grpcserver] requestId:%s requestSq:%s call error: %s", requestId, requestSq, rerr.(error).Error())
+			errorStr := fmt.Sprintf("[grpcserver] call error: %s", rerr.(error).Error())
 			logger.Errorf(errorStr)
 			return neterrors.BusinessError(-2, errorStr)
 		}
 	}
 
 	if err := stream.SendMsg(replyv.Interface()); err != nil {
-		errorStr := fmt.Sprintf("[grpcserver] requestId:%s requestSq:%s send error: %s", requestId, requestSq, err.Error())
+		errorStr := fmt.Sprintf("[grpcserver] send error: %s", err.Error())
 		logger.Errorf(errorStr)
 		return neterrors.BusinessError(-2, errorStr)
 	}
 
 	jsonArgv, _ := json.Marshal(argv.Interface())
 	jsonReplyv, _ := json.Marshal(replyv.Interface())
-	successStr := fmt.Sprintf("[grpcserver] handler success requestId:%s requestSq:%s methodName:%s argv:%s replyv:%s", requestId, requestSq, methodName, jsonArgv, jsonReplyv)
+	successStr := fmt.Sprintf("[grpcserver] handler success  methodName:%s argv:%s replyv:%s", methodName, jsonArgv, jsonReplyv)
 	logger.Info(successStr)
 
 	return nil

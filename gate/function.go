@@ -14,11 +14,12 @@ import (
 	"github.com/visonlv/go-vkit/errorsx/neterrors"
 	"github.com/visonlv/go-vkit/logger"
 	"github.com/visonlv/go-vkit/metadata"
+	meta "github.com/visonlv/go-vkit/metadata"
 )
 
 type authFunc func(w http.ResponseWriter, r *http.Request) error
 
-func errorResponse(w http.ResponseWriter, r *http.Request, _err error) {
+func ErrorResponse(w http.ResponseWriter, r *http.Request, _err error) {
 	var netErr *neterrors.NetError
 	if verr, ok := _err.(*neterrors.NetError); ok {
 		netErr = verr
@@ -86,9 +87,7 @@ func requestPayload(r *http.Request) (bytes []byte, err error) {
 	}
 }
 
-func requestToContext(r *http.Request) context.Context {
-	ctx := context.Background()
-	md := make(metadata.Metadata)
+func requestToContext(ctx context.Context, md meta.Metadata, r *http.Request) context.Context {
 	for k, v := range r.Header {
 		if k == "Connection" {
 			continue

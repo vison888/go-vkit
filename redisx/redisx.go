@@ -11,6 +11,7 @@ import (
 )
 
 // redis.Nil
+
 type RedisClient struct {
 	c *redis.Client
 }
@@ -21,7 +22,7 @@ type RedisKey struct {
 }
 
 func NewClient(addr, password string, db int) (*RedisClient, error) {
-	if addr == "" || password == "" {
+	if addr == "" {
 		logger.Errorf("[redis] NewClient fail:pamar error addr:%s password:%s db:%d ", addr, password, db)
 		return nil, errors.New("pamar error")
 	}

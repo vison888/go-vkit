@@ -13,6 +13,12 @@ type ApiEndpoint struct {
 	ServerStream bool
 }
 
+type FileInfo struct {
+	Filename string
+	Size     int64
+	Content  []byte
+}
+
 type ClientStream interface {
 	// Context for the stream
 	Context() context.Context

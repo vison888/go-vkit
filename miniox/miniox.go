@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -49,6 +50,7 @@ func NewClient(doMain, endPoint, accessKey, accessSecret, bucketName string) (*M
 	// 2. 检查桶是否存在
 	exists, errBucketExists := c.Client.BucketExists(ctx, c.BucketName)
 	if errBucketExists == nil && exists {
+		logger.Errorf("[miniox] NewClient success exists doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", doMain, endPoint, accessKey, accessSecret, bucketName)
 		return c, nil
 	}
 
@@ -59,7 +61,7 @@ func NewClient(doMain, endPoint, accessKey, accessSecret, bucketName string) (*M
 		return nil, err
 	}
 
-	logger.Errorf("[miniox] NewClient success doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", err.Error(), doMain, endPoint, accessKey, accessSecret, bucketName)
+	logger.Errorf("[miniox] NewClient success doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", doMain, endPoint, accessKey, accessSecret, bucketName)
 	return c, nil
 }
 
@@ -139,4 +141,13 @@ func (m *MinioClient) DeleteFileByUrl(file_url string) (err error) {
 	}
 
 	return
+}
+
+func (m *MinioClient) PresignedUrl(bucket, object string) (url string, err error) {
+	u, err := m.Client.PresignedPutObject(context.Background(), bucket, object, 5*time.Minute)
+	if err != nil {
+		return
+	}
+
+	return u.String(), nil
 }

@@ -70,20 +70,20 @@ func (h *WsHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			errorStr := fmt.Sprintf("[gate] WsHandler panic recovered:%v ", re)
 			logger.Errorf(errorStr)
 			logger.Error(string(debug.Stack()))
-			errorResponse(w, r, neterrors.BadRequest(errorStr))
+			ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		}
 	}()
 
 	if cerr := h.auth(w, r); cerr != nil {
 		logger.Errorf("[gate] WsHandler authCheck Err url:%s err:%s", r.RequestURI, cerr.Error())
-		errorResponse(w, r, cerr)
+		ErrorResponse(w, r, cerr)
 		return
 	}
 
 	conn, err := upgrader.Upgrade(w, r, r.Header)
 	if err != nil {
 		logger.Errorf("[gate] WsHandler Upgrade Err url:%s err:%s", r.RequestURI, err)
-		errorResponse(w, r, neterrors.Forbidden(err.Error()))
+		ErrorResponse(w, r, neterrors.Forbidden(err.Error()))
 		return
 	}
 	defer conn.Close()
@@ -92,7 +92,7 @@ func (h *WsHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	if strings.ToLower(readCt) != "application/json" {
 		logger.Errorf("[gate] WsHandler url:%s content-type not application/json", r.RequestURI)
-		errorResponse(w, r, neterrors.Forbidden("content-type not application/json"))
+		ErrorResponse(w, r, neterrors.Forbidden("content-type not application/json"))
 	}
 
 	// 将header转context
@@ -166,7 +166,6 @@ func (h *WsHandler) connectGrpcServer(sc *StreamContext, w http.ResponseWriter, 
 		return fmt.Errorf("StreamByGate fail:%s", netErr.Error())
 	}
 	sc.stream = stream
-	// TODO 发送第一个数据包
 	return nil
 }
 

@@ -7,9 +7,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/visonlv/go-vkit/errorsx/neterrors"
 	"github.com/visonlv/go-vkit/grpcclient"
 	"github.com/visonlv/go-vkit/logger"
@@ -17,14 +15,18 @@ import (
 )
 
 type HttpHandler struct {
-	auth     authFunc
-	grpcPort int
+	opts HttpOptions
 }
 
-func NewHttpHandler(grpcPort int, auth authFunc) *HttpHandler {
+func NewHttpHandler(opts ...HttpOption) *HttpHandler {
 	return &HttpHandler{
-		grpcPort: grpcPort,
-		auth:     auth,
+		opts: newHttpOptions(opts...),
+	}
+}
+
+func (h *HttpHandler) Init(opts ...HttpOption) {
+	for _, o := range opts {
+		o(&h.opts)
 	}
 }
 
@@ -34,7 +36,7 @@ func (h *HttpHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			errorStr := fmt.Sprintf("[gate] HttpHandler panic recovered:%v ", re)
 			logger.Errorf(errorStr)
 			logger.Error(string(debug.Stack()))
-			errorResponse(w, r, neterrors.BadRequest(errorStr))
+			ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		}
 	}()
 
@@ -45,20 +47,16 @@ func (h *HttpHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	if method != "POST" {
 		errorStr := fmt.Sprintf("[gate] req method:%s not support url:%s", method, r.RequestURI)
-		errorResponse(w, r, neterrors.BadRequest(errorStr))
+		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
 
-	if cerr := h.auth(w, r); cerr != nil {
-		errorResponse(w, r, cerr)
-		return
-	}
-
-	reqBytes, err := requestPayload(r)
-	if err != nil {
-		errorStr := fmt.Sprintf("[gate] %s url:%s", err.Error(), r.RequestURI)
-		errorResponse(w, r, neterrors.BadRequest(errorStr))
-		return
+	// 鉴权
+	if h.opts.AuthHandler != nil {
+		if cerr := h.opts.AuthHandler(w, r); cerr != nil {
+			ErrorResponse(w, r, cerr)
+			return
+		}
 	}
 
 	readCt := r.Header.Get("Content-Type")
@@ -76,59 +74,88 @@ func (h *HttpHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	if len(service) == 0 {
 		errorStr := fmt.Sprintf("[gate] service is empty url:%s", r.RequestURI)
-		errorResponse(w, r, neterrors.BadRequest(errorStr))
+		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
 
 	if len(endpoint) == 0 {
 		errorStr := fmt.Sprintf("[gate] endpoint is empty url:%s", r.RequestURI)
-		errorResponse(w, r, neterrors.BadRequest(errorStr))
+		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
 
-	startTime := time.Now()
-
-	requestId := strings.ReplaceAll(uuid.New().String(), "-", "")
-	requestSq := 0
 	md := meta.Metadata{}
 	md["x-content-type"] = readCt
-	md["request_id"] = requestId
-	//插入header
+
+	headers := make(map[string]string, 0)
 	for k, v := range r.Header {
-		if k == "Connection" {
-			continue
-		}
-		md[strings.ToLower(k)] = strings.Join(v, ",")
+		headers[k] = strings.Join(v, ",")
 	}
-	ctx := meta.NewContext(context.Background(), md)
-
-	target := fmt.Sprintf("%s:%d", service, h.grpcPort)
-	jsonRaw, netErr := grpcclient.InvokeByGate(ctx, target, service, endpoint, reqBytes)
-	if netErr != nil {
-		logger.Infof("[gate] InvokeWithJson response netErr:%s", netErr)
-		errorResponse(w, r, netErr)
-		return
+	request := &HttpRequest{
+		uri:         r.RequestURI,
+		r:           r,
+		service:     service,
+		method:      method,
+		contentType: readCt,
+		header:      headers,
+		body:        nil,
+		hasRead:     false,
 	}
 
-	respBytes, err := jsonRaw.MarshalJSON()
+	response := &HttpResponse{
+		w:        w,
+		header:   nil,
+		hasWrite: false,
+		content:  nil,
+	}
+
+	reqBytes, err := request.Read()
 	if err != nil {
-		logger.Infof("[gate] jsonRaw MarshalJSON fail:%s", err)
-		errorResponse(w, r, neterrors.BadRequest(err.Error()))
+		errorStr := fmt.Sprintf("[gate] %s url:%s", err.Error(), r.RequestURI)
+		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
 
-	costTime := time.Since(startTime)
+	// 主逻辑
+	fn := func(ctx context.Context, req *HttpRequest, resp *HttpResponse) error {
+		ctx = requestToContext(ctx, md, r)
+		target := fmt.Sprintf("%s:%d", service, h.opts.GrpcPort)
+		jsonRaw, netErr := grpcclient.InvokeByGate(ctx, target, service, endpoint, reqBytes)
+		if netErr != nil {
+			logger.Infof("[gate] InvokeWithJson response netErr:%s", netErr)
+			return netErr
+		}
 
-	//success
+		respBytes, err := jsonRaw.MarshalJSON()
+		if err != nil {
+			logger.Infof("[gate] jsonRaw MarshalJSON fail:%s", err)
+			return neterrors.BadRequest(err.Error())
+		}
+
+		resp.content = respBytes
+		return nil
+	}
+	// 拦截器
+	for i := len(h.opts.HdlrWrappers); i > 0; i-- {
+		fn = h.opts.HdlrWrappers[i-1](fn)
+	}
+
+	resp := make([]byte, 0)
+	if appErr := fn(context.Background(), request, response); appErr != nil {
+		switch verr := appErr.(type) {
+		case *neterrors.NetError:
+			ErrorResponse(w, r, verr)
+		default:
+			ErrorResponse(w, r, neterrors.BadRequest(verr.Error()))
+		}
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
-	w.Header().Set("Content-Length", strconv.Itoa(len(respBytes)))
-	_, err = w.Write(respBytes)
+	w.Header().Set("Content-Length", strconv.Itoa(len(resp)))
+	_, err = w.Write(resp)
 	if err != nil {
-		logger.Errorf("[gate] requestId:%s requestSq:%d response fail url:%v", requestId, requestSq, r.RequestURI)
-		return
+		logger.Errorf("[gate] response fail url:%v respBytes:%s", r.RequestURI, string(resp))
 	}
-
-	successStr := fmt.Sprintf("[gate] success requestId:%s requestSq:%d cost:[%v] url:[%v] req:[%v] resp:[%v]", requestId, requestSq, costTime.Milliseconds(), r.RequestURI, string(reqBytes), string(respBytes))
-	logger.Infof(successStr)
 }

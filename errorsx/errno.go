@@ -20,7 +20,7 @@ type Errno struct {
 
 func NewErrno(project int32, code int32, msg string) *Errno {
 	if project > 1000 {
-		panic("project invalid, should be >= 1000")
+		panic("project invalid, should be <= 1000")
 	}
 	if code > 999 {
 		panic("code invalid, should be 1~999")

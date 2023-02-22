@@ -2,7 +2,10 @@ package mysqlx
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
+	"github.com/visonlv/go-vkit/logger"
 	"gorm.io/gorm"
 )
 
@@ -36,7 +39,7 @@ func (the *MysqlClient) DeleteById(o interface{}, id string) (bool, error) {
 }
 
 //只能通过id删除
-func (the *MysqlClient) Delete(o interface{}) (bool, error) {
+func (the *MysqlClient) DeleteEx(o interface{}) (bool, error) {
 	result := the.db.Delete(o)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -74,11 +77,49 @@ func (the *MysqlClient) FindPage(page int32, size int32, o interface{}, count *i
 	limit := int64(size)
 
 	var count64 int64
-	the.Count(&count64) //总行数
+	result := the.Count(&count64) //总行数
+	if result.db.Error != nil {
+		return result.db.Error
+	}
+
 	*count = int32(count64)
-	result := the.Offset(int(skip)).Limit(int(limit)).Find(o) //查询pageindex页的数据
+	result = the.Offset(int(skip)).Limit(int(limit)).Find(o) //查询pageindex页的数据
 
 	if result.db.Error != nil {
+		return result.db.Error
+	}
+	return nil
+}
+
+func (the *MysqlClient) FindRawPage(sql string, page int32, size int32, o interface{}, count *int32) error {
+	// 数量sql
+	index := strings.Index(sql, "from")
+	if index == -1 {
+		return fmt.Errorf("不支持该sql %s", sql)
+	}
+	countSql := "select count(1) " + sql[index:]
+
+	var count64 int64
+	result := the.Raw(countSql).Count(&count64)
+	if result.GetDB().Error != nil {
+		logger.Errorf("FindRawPage countSql:%s", countSql)
+		return result.GetDB().Error
+	}
+	*count = int32(count64)
+
+	// 分页sql
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 {
+		size = 10
+	}
+	skip := int64((page - 1) * size)
+	limit := int64(size)
+	pageSql := sql + fmt.Sprintf(" limit %d,%d", skip, limit)
+	result = the.Raw(pageSql).Find(o)
+	if result.db.Error != nil {
+		logger.Errorf("FindRawPage pageSql:%s", pageSql)
 		return result.db.Error
 	}
 	return nil
@@ -104,7 +145,7 @@ func (the *MysqlClient) FindFirst(o interface{}) (bool, error) {
 }
 
 //支持多个数据更新
-func (the *MysqlClient) Update(o interface{}) error {
+func (the *MysqlClient) UpdateEx(o interface{}) error {
 	result := the.db.Save(o)
 	if result.Error != nil {
 		return result.Error

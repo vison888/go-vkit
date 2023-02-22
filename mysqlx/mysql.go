@@ -88,3 +88,53 @@ func (the *MysqlClient) Joins(query string, args ...interface{}) *MysqlClient {
 func (the *MysqlClient) AutoMigrate(dst ...interface{}) error {
 	return the.db.AutoMigrate(dst...)
 }
+
+func (the *MysqlClient) Delete(value interface{}, conds ...interface{}) *MysqlClient {
+	tx := the.db.Delete(value, conds...)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Update(column string, value interface{}) *MysqlClient {
+	tx := the.db.Update(column, value)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Order(value interface{}) *MysqlClient {
+	tx := the.db.Order(value)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Having(query interface{}, args ...interface{}) *MysqlClient {
+	tx := the.db.Having(query, args...)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Or(query interface{}, args ...interface{}) *MysqlClient {
+	tx := the.db.Or(query, args...)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Not(query interface{}, args ...interface{}) *MysqlClient {
+	tx := the.db.Not(query, args...)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Omit(columns ...string) *MysqlClient {
+	tx := the.db.Omit(columns...)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Scan(dest interface{}) *MysqlClient {
+	tx := the.db.Scan(dest)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Pluck(column string, dest interface{}) *MysqlClient {
+	tx := the.db.Pluck(column, dest)
+	return newOnChain(the, tx)
+}
+
+func (the *MysqlClient) Take(dest interface{}, conds ...interface{}) *MysqlClient {
+	tx := the.db.Take(dest, conds...)
+	return newOnChain(the, tx)
+}

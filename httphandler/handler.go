@@ -12,7 +12,6 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/visonlv/go-vkit/codec"
@@ -21,9 +20,10 @@ import (
 	"github.com/visonlv/go-vkit/grpcx"
 	"github.com/visonlv/go-vkit/logger"
 	"google.golang.org/grpc/encoding"
+	gmetadata "google.golang.org/grpc/metadata"
 )
 
-type authFunc func(w http.ResponseWriter, r *http.Request) bool
+type authFunc func(w http.ResponseWriter, r *http.Request) error
 type filterFunc func(w http.ResponseWriter, r *http.Request, b []byte) ([]byte, error)
 
 type handlerInfo struct {
@@ -36,7 +36,6 @@ type handlerInfo struct {
 }
 
 type Handler struct {
-	sync.RWMutex
 	handlers   map[string]*handlerInfo
 	authFunc   authFunc
 	filterFunc filterFunc
@@ -78,7 +77,7 @@ func errorResponse(w http.ResponseWriter, r *http.Request, _err error) {
 	fmt.Fprintln(w, paramStr)
 }
 
-func requestPayload(r *http.Request) (bytes []byte, err error) {
+func requestPayload(r *http.Request) (bytes []byte, fileMap map[string]*grpcx.FileInfo, err error) {
 	closeBody := func(body io.ReadCloser) {
 		if e := body.Close(); e != nil {
 			err = errors.New("[httphandler] body close failed")
@@ -98,27 +97,38 @@ func requestPayload(r *http.Request) (bytes []byte, err error) {
 		for k, v := range r.Form {
 			vals[k] = strings.Join(v, ",")
 		}
-		return json.Marshal(vals)
+		b, err := json.Marshal(vals)
+		return b, nil, err
 	case strings.Contains(ct, "multipart/form-data"):
 		if err := r.ParseMultipartForm(int64(10 << 20)); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		vals := make(map[string]interface{})
 		for k, v := range r.MultipartForm.Value {
 			vals[k] = strings.Join(v, ",")
 		}
-		for k := range r.MultipartForm.File {
-			f, _, err := r.FormFile(k)
-			if err != nil {
-				return nil, err
-			}
-			b, err := ioutil.ReadAll(f)
-			if err != nil {
-				return nil, err
-			}
-			vals[k] = b
+
+		var files map[string]*grpcx.FileInfo
+		if len(r.MultipartForm.File) > 0 {
+			files = make(map[string]*grpcx.FileInfo)
 		}
-		return json.Marshal(vals)
+		for k := range r.MultipartForm.File {
+			f, h, err := r.FormFile(k)
+			if err != nil {
+				return nil, nil, err
+			}
+			b1, err := ioutil.ReadAll(f)
+			if err != nil {
+				return nil, nil, err
+			}
+			files[k] = &grpcx.FileInfo{
+				Filename: h.Filename,
+				Size:     h.Size,
+				Content:  b1,
+			}
+		}
+		b, err := json.Marshal(vals)
+		return b, files, err
 	default:
 		err = fmt.Errorf("[httphandler] not support contentType:%s", ct)
 		return
@@ -186,7 +196,7 @@ func (h *Handler) RegisterWithUrl(i interface{}, apiEndpointMap map[string]*grpc
 		if reqMethod != "" {
 			h.handlers[reqMethod] = handler
 		}
-		logger.Infof("[httphandler] Register reqUrl:%s reqMethod:%s", reqUrl, reqMethod)
+		// logger.Infof("[httphandler] Register reqUrl:%s reqMethod:%s", reqUrl, reqMethod)
 	}
 	return nil
 }
@@ -217,14 +227,13 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.authFunc != nil {
-		if !h.authFunc(w, r) {
-			errorStr := fmt.Sprintf("[httphandler] check token fail url:%s", r.RequestURI)
-			errorResponse(w, r, neterrors.BadRequest(errorStr))
+		if cerr := h.authFunc(w, r); cerr != nil {
+			errorResponse(w, r, cerr)
 			return
 		}
 	}
 
-	reqBytes, err := requestPayload(r)
+	reqBytes, files, err := requestPayload(r)
 	if err != nil {
 		errorStr := fmt.Sprintf("[httphandler] %s url:%s", err.Error(), r.RequestURI)
 		errorResponse(w, r, neterrors.BadRequest(errorStr))
@@ -289,6 +298,27 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if files != nil {
+		filesRet := make(map[string][]byte, 0)
+		for k, v := range files {
+			filesRet[k] = v.Content
+		}
+
+		filenamesRet := make(map[string]string, 0)
+		for k, v := range files {
+			filenamesRet[k] = v.Filename
+		}
+		// 检查回调
+		field1 := argv.Elem().FieldByName("Files")
+		if field1.CanSet() {
+			field1.Set(reflect.ValueOf(filesRet))
+		}
+		field2 := argv.Elem().FieldByName("Filenames")
+		if field2.CanSet() {
+			field2.Set(reflect.ValueOf(filenamesRet))
+		}
+	}
+
 	// validate
 	validateFunc, b := hi.reqType.MethodByName("Validate")
 	if b {
@@ -303,10 +333,16 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	startTime := time.Now()
+	hdr := map[string]string{}
+	for k := range r.Header {
+		hdr[k] = r.Header.Get(k)
+	}
+	md := gmetadata.New(hdr)
+	ctx := gmetadata.NewIncomingContext(context.Background(), md)
 
 	in := make([]reflect.Value, 4)
 	in[0] = hi.handler
-	in[1] = reflect.ValueOf(context.Background())
+	in[1] = reflect.ValueOf(ctx)
 	in[2] = argv
 	in[3] = replyv
 	out := hi.method.Func.Call(in)
@@ -347,7 +383,7 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	successStr := fmt.Sprintf("[httphandler] success cost:[%v] url:[%v] req:[%v] resp:[%v]", costTime.Milliseconds(), r.RequestURI, string(reqBytes), string(respBytes))
+	successStr := fmt.Sprintf("[httphandler] success cost:%v url:%v req:%v resp:%v", costTime.Milliseconds(), r.RequestURI, string(reqBytes), string(respBytes))
 	logger.Infof(successStr)
 
 }
