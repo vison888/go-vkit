@@ -21,7 +21,7 @@ var (
 		errorStr := fmt.Sprintf("[gate] panic recovered:%v ", err)
 		logger.Errorf(errorStr)
 		logger.Error(string(debug.Stack()))
-		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
+		ErrorResponse(w, r, neterrors.InternalServerError(errorStr))
 	}
 )
 
