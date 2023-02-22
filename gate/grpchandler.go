@@ -85,17 +85,12 @@ func (h *GrpcHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	md := meta.Metadata{}
 	md["x-content-type"] = readCt
 
-	headers := make(map[string]string, 0)
-	for k, v := range r.Header {
-		headers[k] = strings.Join(v, ",")
-	}
 	request := &HttpRequest{
 		uri:         r.RequestURI,
 		r:           r,
 		service:     service,
 		method:      method,
 		contentType: readCt,
-		header:      headers,
 		body:        nil,
 		hasRead:     false,
 	}
@@ -114,9 +109,9 @@ func (h *GrpcHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fullCtx := requestToContext(context.Background(), md, r)
 	// 主逻辑
 	fn := func(ctx context.Context, req *HttpRequest, resp *HttpResponse) error {
-		ctx = requestToContext(ctx, md, r)
 		target := fmt.Sprintf("%s:%d", service, h.opts.GrpcPort)
 		jsonRaw, netErr := grpcclient.InvokeByGate(ctx, target, service, endpoint, reqBytes)
 		if netErr != nil {
@@ -139,7 +134,7 @@ func (h *GrpcHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := make([]byte, 0)
-	if appErr := fn(context.Background(), request, response); appErr != nil {
+	if appErr := fn(fullCtx, request, response); appErr != nil {
 		switch verr := appErr.(type) {
 		case *neterrors.NetError:
 			ErrorResponse(w, r, verr)

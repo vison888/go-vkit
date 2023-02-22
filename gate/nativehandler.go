@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/visonlv/go-vkit/codec"
-	cerrors "github.com/visonlv/go-vkit/errorsx"
+	"github.com/visonlv/go-vkit/errorsx"
 	"github.com/visonlv/go-vkit/errorsx/neterrors"
 	"github.com/visonlv/go-vkit/grpcx"
 	"github.com/visonlv/go-vkit/logger"
@@ -128,7 +128,7 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if method != "POST" {
-		errorStr := fmt.Sprintf("[httphandler req method:%s only support url:%s", method, r.RequestURI)
+		errorStr := fmt.Sprintf("[nativehandler req method:%s only support url:%s", method, r.RequestURI)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
@@ -139,13 +139,6 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			ErrorResponse(w, r, cerr)
 			return
 		}
-	}
-
-	reqBytes, err := requestPayload(r)
-	if err != nil {
-		errorStr := fmt.Sprintf("[httphandler] %s url:%s", err.Error(), r.RequestURI)
-		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
-		return
 	}
 
 	readCt := r.Header.Get("Content-Type")
@@ -162,20 +155,44 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(service) == 0 {
-		errorStr := fmt.Sprintf("[httphandler] service is empty url:%s", r.RequestURI)
+		errorStr := fmt.Sprintf("[nativehandler] service is empty url:%s", r.RequestURI)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
 
 	if len(endpoint) == 0 {
-		errorStr := fmt.Sprintf("[httphandler] endpoint is empty url:%s", r.RequestURI)
+		errorStr := fmt.Sprintf("[nativehandler] endpoint is empty url:%s", r.RequestURI)
+		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
+		return
+	}
+
+	request := &HttpRequest{
+		uri:         r.RequestURI,
+		r:           r,
+		service:     service,
+		method:      method,
+		contentType: readCt,
+		body:        nil,
+		hasRead:     false,
+	}
+
+	response := &HttpResponse{
+		w:        w,
+		header:   nil,
+		hasWrite: false,
+		content:  nil,
+	}
+
+	reqBytes, err := request.Read()
+	if err != nil {
+		errorStr := fmt.Sprintf("[nativehandler] %s url:%s", err.Error(), r.RequestURI)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
 
 	hi, b := h.handlers[endpoint]
 	if !b {
-		errorStr := fmt.Sprintf("[httphandler] unknown method %s", endpoint)
+		errorStr := fmt.Sprintf("[nativehandler] unknown method %s", endpoint)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
@@ -185,28 +202,15 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	var cd encoding.Codec
 	if cd = codec.DefaultGRPCCodecs[readCt]; cd.Name() != "json" {
-		errorStr := fmt.Sprintf("[httphandler] not support content type:%s", r.RequestURI)
+		errorStr := fmt.Sprintf("[nativehandler] not support content type:%s", r.RequestURI)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
 
 	if err := cd.Unmarshal(reqBytes, argv.Interface()); err != nil {
-		errorStr := fmt.Sprintf("[httphandler] Unmarshal error: %s", err.Error())
+		errorStr := fmt.Sprintf("[nativehandler] Unmarshal error: %s", err.Error())
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
-	}
-
-	// validate
-	validateFunc, b := hi.reqType.MethodByName("Validate")
-	if b {
-		out := validateFunc.Func.Call([]reflect.Value{reflect.ValueOf(argv.Interface())})
-		errValue := out[0]
-		if errValue.Interface() != nil {
-			err := errValue.Interface().(error)
-			errorStr := fmt.Sprintf("[httphandler] param error: %s", err.Error())
-			ErrorResponse(w, r, neterrors.BusinessError(-1, errorStr))
-			return
-		}
 	}
 
 	hdr := map[string]string{}
@@ -214,46 +218,73 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		hdr[k] = r.Header.Get(k)
 	}
 	md := gmetadata.New(hdr)
-	ctx := gmetadata.NewIncomingContext(context.Background(), md)
-
-	in := make([]reflect.Value, 4)
-	in[0] = hi.handler
-	in[1] = reflect.ValueOf(ctx)
-	in[2] = argv
-	in[3] = replyv
-	out := hi.method.Func.Call(in)
-	if rerr := out[0].Interface(); rerr != nil {
-		//处理业务异常
-		if verr, ok := rerr.(*cerrors.Errno); ok {
-			if verr.Code != 0 {
-				errorStr := fmt.Sprintf("[httphandler] call error: %s", verr.Error())
-				logger.Errorf(errorStr)
-				ErrorResponse(w, r, neterrors.BusinessError(verr.Code, verr.Msg))
-				return
+	fullCtx := gmetadata.NewIncomingContext(context.Background(), md)
+	// 主逻辑
+	fn := func(ctx context.Context, req *HttpRequest, resp *HttpResponse) error {
+		// validate
+		validateFunc, b := hi.reqType.MethodByName("Validate")
+		if b {
+			out := validateFunc.Func.Call([]reflect.Value{reflect.ValueOf(argv.Interface())})
+			errValue := out[0]
+			if errValue.Interface() != nil {
+				err := errValue.Interface().(error)
+				errorStr := fmt.Sprintf("[nativehandler] param error: %s", err.Error())
+				return neterrors.BusinessError(-1, errorStr)
 			}
-		} else {
-			//其他异常统一包装
-			errorStr := fmt.Sprintf("[httphandler] call error: %s", rerr.(error).Error())
-			logger.Errorf(errorStr)
-			ErrorResponse(w, r, neterrors.BusinessError(-2, errorStr))
-			return
 		}
+
+		in := make([]reflect.Value, 4)
+		in[0] = hi.handler
+		in[1] = reflect.ValueOf(ctx)
+		in[2] = argv
+		in[3] = replyv
+		out := hi.method.Func.Call(in)
+		if rerr := out[0].Interface(); rerr != nil {
+			//处理业务异常
+			if verr, ok := rerr.(*errorsx.Errno); ok {
+				if verr.Code != 0 {
+					errorStr := fmt.Sprintf("[nativehandler] call error: %s", verr.Error())
+					logger.Errorf(errorStr)
+					return neterrors.BusinessError(verr.Code, verr.Msg)
+				}
+			} else {
+				//其他异常统一包装
+				errorStr := fmt.Sprintf("[nativehandler] call error: %s", rerr.(error).Error())
+				logger.Errorf(errorStr)
+				return neterrors.BusinessError(-2, errorStr)
+			}
+		}
+
+		respBytes, err := cd.Marshal(replyv.Interface())
+		if err != nil {
+			logger.Infof("[nativehandler] jsonRaw Marshal fail:%s", err)
+			return neterrors.BadRequest(err.Error())
+		}
+
+		resp.content = respBytes
+		return nil
+	}
+	// 拦截器
+	for i := len(h.opts.HdlrWrappers); i > 0; i-- {
+		fn = h.opts.HdlrWrappers[i-1](fn)
 	}
 
-	respBytes, err := cd.Marshal(replyv.Interface())
-	if err != nil {
-		logger.Infof("[httphandler] jsonRaw Marshal fail:%s", err)
-		ErrorResponse(w, r, neterrors.BadRequest(err.Error()))
+	resp := make([]byte, 0)
+	if appErr := fn(fullCtx, request, response); appErr != nil {
+		switch verr := appErr.(type) {
+		case *neterrors.NetError:
+			ErrorResponse(w, r, verr)
+		default:
+			ErrorResponse(w, r, neterrors.BadRequest(verr.Error()))
+		}
 		return
 	}
 
-	//success
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
-	w.Header().Set("Content-Length", strconv.Itoa(len(respBytes)))
-	_, err = w.Write(respBytes)
+	w.Header().Set("Content-Length", strconv.Itoa(len(resp)))
+	_, err = w.Write(resp)
 	if err != nil {
-		logger.Errorf("[httphandler] Write fail url:%v", r.RequestURI)
-		return
+		logger.Errorf("[nativehandler] response fail url:%v respBytes:%s", r.RequestURI, string(resp))
 	}
 }

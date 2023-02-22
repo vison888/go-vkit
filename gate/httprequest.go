@@ -10,7 +10,6 @@ type HttpRequest struct {
 	service     string
 	method      string
 	contentType string
-	header      map[string]string
 	body        []byte
 	hasRead     bool
 }
@@ -29,10 +28,6 @@ func (r *HttpRequest) Method() string {
 
 func (r *HttpRequest) Endpoint() string {
 	return r.method
-}
-
-func (r *HttpRequest) Header() map[string]string {
-	return r.header
 }
 
 func (r *HttpRequest) Uri() string {
