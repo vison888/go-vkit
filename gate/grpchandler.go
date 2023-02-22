@@ -133,7 +133,6 @@ func (h *GrpcHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		fn = h.opts.HdlrWrappers[i-1](fn)
 	}
 
-	resp := make([]byte, 0)
 	if appErr := fn(fullCtx, request, response); appErr != nil {
 		switch verr := appErr.(type) {
 		case *neterrors.NetError:
@@ -146,9 +145,9 @@ func (h *GrpcHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
-	w.Header().Set("Content-Length", strconv.Itoa(len(resp)))
-	_, err = w.Write(resp)
+	w.Header().Set("Content-Length", strconv.Itoa(len(response.content)))
+	_, err = w.Write(response.content)
 	if err != nil {
-		logger.Errorf("[gate] response fail url:%v respBytes:%s", r.RequestURI, string(resp))
+		logger.Errorf("[gate] response fail url:%v respBytes:%s", r.RequestURI, string(response.content))
 	}
 }
