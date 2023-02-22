@@ -7,7 +7,6 @@ import (
 	_ "github.com/visonlv/go-vkit/gate"
 	_ "github.com/visonlv/go-vkit/grpcclient"
 	_ "github.com/visonlv/go-vkit/grpcserver"
-	_ "github.com/visonlv/go-vkit/httphandler"
 	_ "github.com/visonlv/go-vkit/logger"
 	_ "github.com/visonlv/go-vkit/metadata"
 	_ "github.com/visonlv/go-vkit/miniox"

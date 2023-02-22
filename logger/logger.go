@@ -115,7 +115,11 @@ func tryNewFile(force bool) {
 		// builf file path
 		timeStr := time.Now().Format("20060102150405")
 		fileDir := fmt.Sprintf("%s%s", logDir, appName)
-		filePath := fmt.Sprintf("%s/%s.%s.log", fileDir, podName, timeStr)
+		filePath := fmt.Sprintf("%s/%s.log", fileDir, timeStr)
+		if podName != "" {
+			filePath = fmt.Sprintf("%s/%s.%s.log", fileDir, podName, timeStr)
+		}
+
 		//try create dir
 		_, err := os.Stat(fileDir)
 		if err != nil {
