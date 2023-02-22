@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/visonlv/go-vkit/codec"
 	cerrors "github.com/visonlv/go-vkit/errorsx"
@@ -210,7 +209,6 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	startTime := time.Now()
 	hdr := map[string]string{}
 	for k := range r.Header {
 		hdr[k] = r.Header.Get(k)
@@ -249,8 +247,6 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	costTime := time.Since(startTime)
-
 	//success
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
@@ -260,7 +256,4 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		logger.Errorf("[httphandler] Write fail url:%v", r.RequestURI)
 		return
 	}
-
-	successStr := fmt.Sprintf("[httphandler] success cost:%v url:%v req:%v resp:%v", costTime.Milliseconds(), r.RequestURI, string(reqBytes), string(respBytes))
-	logger.Infof(successStr)
 }
