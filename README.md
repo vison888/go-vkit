@@ -91,12 +91,35 @@ func startGrpcServer() {
 提供一种直接暴露http端口的模块，该模块只支持post协议，内部将post的body通过反射成pb结构，并回调到指定的方法逻辑中。
 
 ```
-tokenCheck := func(w http.ResponseWriter, r *http.Request) error {
-		return nil
+func tokenCheckFunc(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func logFunc(f gate.HandlerFunc) gate.HandlerFunc {
+	return func(ctx context.Context, req *gate.HttpRequest, resp *gate.HttpResponse) error {
+		startTime := time.Now()
+		err := f(ctx, req, resp)
+		costTime := time.Since(startTime)
+		body, _ := req.Read()
+		var logText string
+		if err != nil {
+			logText = fmt.Sprintf("fail cost:[%v] url:[%v] req:[%v] resp:[%v]", costTime.Milliseconds(), req.Uri(), string(body), err.Error())
+		} else {
+			logText = fmt.Sprintf("success cost:[%v] url:[%v] req:[%v] resp:[%v]", costTime.Milliseconds(), req.Uri(), string(body), string(resp.Content()))
+		}
+		logger.Infof(logText)
+		return err
 	}
-	//http 转发
-	h := httphandler.NewHandler()
-	h.WithAuthFunc(tokenCheck)
+}
+
+func Start() {
+	//初始化权限数据
+	authObj.Start()
+
+	h := gate.NewNativeHandler(
+		gate.HttpAuthHandler(tokenCheckFunc),
+		gate.HttpWrapHandler(logFunc),
+	)
 	err := h.RegisterApiEndpoint(handler.GetList(), handler.GetApiEndpoint())
 	if err != nil {
 		logger.Errorf("[main] RegisterApiEndpoint fail %s", err)
@@ -112,6 +135,7 @@ tokenCheck := func(w http.ResponseWriter, r *http.Request) error {
 		logger.Errorf("[main] ListenAndServe fail %s", err)
 		panic(err)
 	}
+}
 	
 ```
 ## 5、日志  
