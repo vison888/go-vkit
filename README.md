@@ -1,8 +1,8 @@
 # go-vkit
-项目限制：
-使用go1.17.7版本及以上
-api统一格式  /前缀/服务名/模块.方法 如:/rpc/speech/AppService.Create
-日志文件只保留七天
+项目限制：  
+使用go1.17.7版本及以上  
+api统一格式  /前缀/服务名/模块.方法 如:/rpc/speech/AppService.Create  
+日志文件只保留七天  
 
 # 主要提供以下功能模块：
 1、网关gate  
