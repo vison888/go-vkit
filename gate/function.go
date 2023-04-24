@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/visonlv/go-vkit/errorsx/neterrors"
+	"github.com/visonlv/go-vkit/grpcx"
 	"github.com/visonlv/go-vkit/logger"
 	"github.com/visonlv/go-vkit/metadata"
 	meta "github.com/visonlv/go-vkit/metadata"
@@ -38,10 +39,10 @@ func ErrorResponse(w http.ResponseWriter, r *http.Request, _err error) {
 	fmt.Fprintln(w, paramStr)
 }
 
-func requestPayload(r *http.Request) (bytes []byte, err error) {
+func requestPayload(r *http.Request) (bytes []byte, fileMap map[string]*grpcx.FileInfo, err error) {
 	closeBody := func(body io.ReadCloser) {
 		if e := body.Close(); e != nil {
-			err = errors.New("[gate] body close failed")
+			err = errors.New("[httphandler] body close failed")
 			return
 		}
 	}
@@ -58,29 +59,40 @@ func requestPayload(r *http.Request) (bytes []byte, err error) {
 		for k, v := range r.Form {
 			vals[k] = strings.Join(v, ",")
 		}
-		return json.Marshal(vals)
+		b, err := json.Marshal(vals)
+		return b, nil, err
 	case strings.Contains(ct, "multipart/form-data"):
 		if err := r.ParseMultipartForm(int64(10 << 20)); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		vals := make(map[string]interface{})
 		for k, v := range r.MultipartForm.Value {
 			vals[k] = strings.Join(v, ",")
 		}
-		for k := range r.MultipartForm.File {
-			f, _, err := r.FormFile(k)
-			if err != nil {
-				return nil, err
-			}
-			b, err := ioutil.ReadAll(f)
-			if err != nil {
-				return nil, err
-			}
-			vals[k] = b
+
+		var files map[string]*grpcx.FileInfo
+		if len(r.MultipartForm.File) > 0 {
+			files = make(map[string]*grpcx.FileInfo)
 		}
-		return json.Marshal(vals)
+		for k := range r.MultipartForm.File {
+			f, h, err := r.FormFile(k)
+			if err != nil {
+				return nil, nil, err
+			}
+			b1, err := ioutil.ReadAll(f)
+			if err != nil {
+				return nil, nil, err
+			}
+			files[k] = &grpcx.FileInfo{
+				Filename: h.Filename,
+				Size:     h.Size,
+				Content:  b1,
+			}
+		}
+		b, err := json.Marshal(vals)
+		return b, files, err
 	default:
-		err = fmt.Errorf("[gate] not support contentType:%s", ct)
+		err = fmt.Errorf("[httphandler] not support contentType:%s", ct)
 		return
 	}
 }

@@ -35,7 +35,7 @@ func (the *AuthService) RefleshUrl(ctx context.Context, req *RefleshUrlReq, resp
 }
 
 func postData(url string, reqBody, token string) (string, int, error) {
-	url = "http://localhost:8080" + url
+	url = "http://localhost:8081" + url
 	payload := strings.NewReader(reqBody)
 	client := &http.Client{Timeout: time.Second * 3}
 	req, err := http.NewRequest(http.MethodPost, url, payload)
@@ -64,7 +64,7 @@ func postData(url string, reqBody, token string) (string, int, error) {
 }
 
 func startGrpcServer() {
-	svr := grpcserver.NewServer()
+	svr := grpcserver.NewServer(grpcserver.GrpcAddr("0.0.0.0:10000"))
 	err := svr.RegisterApiEndpoint([]interface{}{&AuthService{}}, []*grpcx.ApiEndpoint{{
 		Method:       "AuthService.RefleshUrl",
 		Url:          "/rpc/sso/AuthService.RefleshUrl",
@@ -76,7 +76,7 @@ func startGrpcServer() {
 		panic(err)
 	}
 
-	svr.Run("0.0.0.0:10000")
+	svr.Run()
 }
 
 func TestAuth(t *testing.T) {
@@ -99,7 +99,7 @@ func TestAuth(t *testing.T) {
 	http.HandleFunc("/rpc/", func(w http.ResponseWriter, r *http.Request) {
 		customHandler.Handle(w, r)
 	})
-	err := http.ListenAndServe("0.0.0.0:8080", nil)
+	err := http.ListenAndServe("0.0.0.0:8081", nil)
 	if err != nil {
 		logger.Infof("start server fail, err:%s", err)
 	} else {
@@ -169,7 +169,7 @@ func TestWrapHandler(t *testing.T) {
 		customHandler.Handle(w, r)
 	})
 	go func() {
-		err := http.ListenAndServe("0.0.0.0:8080", nil)
+		err := http.ListenAndServe("0.0.0.0:8081", nil)
 		if err != nil {
 			logger.Infof("start server fail, err:%s", err)
 		} else {
@@ -217,7 +217,7 @@ func TestLog(t *testing.T) {
 			f(ctx, req, resp)
 			costTime := time.Since(startTime)
 
-			body, _ := req.Read()
+			body, _, _ := req.Read()
 			successStr := fmt.Sprintf("success cost:[%v] url:[%v] req:[%v] resp:[%v]", costTime.Milliseconds(), req.Uri(), string(body), string(resp.Content()))
 			logger.Infof(successStr)
 			return nil
@@ -232,7 +232,7 @@ func TestLog(t *testing.T) {
 		customHandler.Handle(w, r)
 	})
 	go func() {
-		err := http.ListenAndServe("0.0.0.0:8080", nil)
+		err := http.ListenAndServe("0.0.0.0:8081", nil)
 		if err != nil {
 			logger.Infof("start server fail, err:%s", err)
 		} else {
@@ -280,7 +280,7 @@ func TestTraceLog(t *testing.T) {
 			f(ctx, req, resp)
 			costTime := time.Since(startTime)
 
-			body, _ := req.Read()
+			body, _, _ := req.Read()
 			successStr := fmt.Sprintf("success cost:[%v] url:[%v] req:[%v] resp:[%v]", costTime.Milliseconds(), req.Uri(), string(body), string(resp.Content()))
 			logger.Infof(successStr)
 			return nil
@@ -295,7 +295,7 @@ func TestTraceLog(t *testing.T) {
 		customHandler.Handle(w, r)
 	})
 	go func() {
-		err := http.ListenAndServe("0.0.0.0:8080", nil)
+		err := http.ListenAndServe("0.0.0.0:8081", nil)
 		if err != nil {
 			logger.Infof("start server fail, err:%s", err)
 		} else {

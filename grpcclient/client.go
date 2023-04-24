@@ -2,7 +2,6 @@ package grpcclient
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -141,7 +140,7 @@ func (ccc *customClient) Invoke(ctx context.Context, service, endpoint string, a
 			if verr, ok := grr.(*neterrors.NetError); ok {
 				//服务不可用 删除客户端
 				if verr.Status == http.StatusServiceUnavailable {
-					logger.Info("[grpcclient] remove client ccc.addr:%s", ccc.addr)
+					logger.Infof("[grpcclient] remove client ccc.addr:%s", ccc.addr)
 					DelConnClient(ccc.addr)
 				}
 			}
@@ -182,17 +181,6 @@ func (ccc *customClient) Invoke(ctx context.Context, service, endpoint string, a
 	case <-ctx.Done():
 		grr = neterrors.Timeout("[grpcclient] req fail %v", ctx.Err())
 	}
-
-	var jsonArgv []byte
-	if raw, ok := args.([]byte); ok {
-		jsonArgv = raw
-	} else {
-		jsonArgv, _ = json.Marshal(args)
-	}
-
-	jsonReplyv, _ := json.Marshal(reply)
-	successStr := fmt.Sprintf("[grpcclient] request success methodName:%s argv:%s replyv:%s", method, jsonArgv, jsonReplyv)
-	logger.Info(successStr)
 
 	return grr
 }

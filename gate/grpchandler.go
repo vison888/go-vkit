@@ -102,16 +102,15 @@ func (h *GrpcHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		content:  nil,
 	}
 
-	reqBytes, err := request.Read()
-	if err != nil {
-		errorStr := fmt.Sprintf("[gate] %s url:%s", err.Error(), r.RequestURI)
-		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
-		return
-	}
-
 	fullCtx := requestToContext(context.Background(), md, r)
 	// 主逻辑
 	fn := func(ctx context.Context, req *HttpRequest, resp *HttpResponse) error {
+		reqBytes, _, err := request.Read()
+		if err != nil {
+			errorStr := fmt.Sprintf("[gate] %s url:%s", err.Error(), r.RequestURI)
+			return neterrors.BadRequest(errorStr)
+		}
+
 		target := fmt.Sprintf("%s:%d", service, h.opts.GrpcPort)
 		jsonRaw, netErr := grpcclient.InvokeByGate(ctx, target, service, endpoint, reqBytes)
 		if netErr != nil {
@@ -146,7 +145,7 @@ func (h *GrpcHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 	w.Header().Set("Content-Length", strconv.Itoa(len(response.content)))
-	_, err = w.Write(response.content)
+	_, err := w.Write(response.content)
 	if err != nil {
 		logger.Errorf("[gate] response fail url:%v respBytes:%s", r.RequestURI, string(response.content))
 	}

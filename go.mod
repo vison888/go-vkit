@@ -6,7 +6,7 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gofrs/uuid v4.2.0+incompatible
 	github.com/golang/protobuf v1.5.2
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.1.2 // indirect
 	github.com/minio/minio-go/v7 v7.0.10
 	github.com/nats-io/nats.go v1.15.0
 	go.mongodb.org/mongo-driver v1.9.0

@@ -183,36 +183,6 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		content:  nil,
 	}
 
-	reqBytes, err := request.Read()
-	if err != nil {
-		errorStr := fmt.Sprintf("[nativehandler] %s url:%s", err.Error(), r.RequestURI)
-		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
-		return
-	}
-
-	hi, b := h.handlers[endpoint]
-	if !b {
-		errorStr := fmt.Sprintf("[nativehandler] unknown method %s", endpoint)
-		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
-		return
-	}
-
-	argv := reflect.New(hi.reqType.Elem())
-	replyv := reflect.New(hi.respType.Elem())
-
-	var cd encoding.Codec
-	if cd = codec.DefaultGRPCCodecs[readCt]; cd.Name() != "json" {
-		errorStr := fmt.Sprintf("[nativehandler] not support content type:%s", r.RequestURI)
-		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
-		return
-	}
-
-	if err := cd.Unmarshal(reqBytes, argv.Interface()); err != nil {
-		errorStr := fmt.Sprintf("[nativehandler] Unmarshal error: %s", err.Error())
-		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
-		return
-	}
-
 	hdr := map[string]string{}
 	for k := range r.Header {
 		hdr[k] = r.Header.Get(k)
@@ -221,6 +191,53 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	fullCtx := gmetadata.NewIncomingContext(context.Background(), md)
 	// 主逻辑
 	fn := func(ctx context.Context, req *HttpRequest, resp *HttpResponse) error {
+		reqBytes, files, err := request.Read()
+		if err != nil {
+			errorStr := fmt.Sprintf("[nativehandler] %s url:%s", err.Error(), r.RequestURI)
+			return neterrors.BadRequest(errorStr)
+		}
+
+		hi, b := h.handlers[endpoint]
+		if !b {
+			errorStr := fmt.Sprintf("[nativehandler] unknown method %s", endpoint)
+			return neterrors.BadRequest(errorStr)
+		}
+
+		argv := reflect.New(hi.reqType.Elem())
+		replyv := reflect.New(hi.respType.Elem())
+
+		var cd encoding.Codec
+		if cd = codec.DefaultGRPCCodecs[readCt]; cd.Name() != "json" {
+			errorStr := fmt.Sprintf("[nativehandler] not support content type:%s", r.RequestURI)
+			return neterrors.BadRequest(errorStr)
+		}
+
+		if err := cd.Unmarshal(reqBytes, argv.Interface()); err != nil {
+			errorStr := fmt.Sprintf("[nativehandler] Unmarshal error: %s", err.Error())
+			return neterrors.BadRequest(errorStr)
+		}
+
+		if files != nil {
+			filesRet := make(map[string][]byte, 0)
+			for k, v := range files {
+				filesRet[k] = v.Content
+			}
+
+			filenamesRet := make(map[string]string, 0)
+			for k, v := range files {
+				filenamesRet[k] = v.Filename
+			}
+			// 检查回调
+			field1 := argv.Elem().FieldByName("Files")
+			if field1.CanSet() {
+				field1.Set(reflect.ValueOf(filesRet))
+			}
+			field2 := argv.Elem().FieldByName("Filenames")
+			if field2.CanSet() {
+				field2.Set(reflect.ValueOf(filenamesRet))
+			}
+		}
+
 		// validate
 		validateFunc, b := hi.reqType.MethodByName("Validate")
 		if b {
@@ -282,7 +299,7 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(200)
 	w.Header().Set("Content-Length", strconv.Itoa(len(response.content)))
-	_, err = w.Write(response.content)
+	_, err := w.Write(response.content)
 	if err != nil {
 		logger.Errorf("[nativehandler] response fail url:%v respBytes:%s", r.RequestURI, string(response.content))
 	}

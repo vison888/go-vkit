@@ -2,6 +2,8 @@ package gate
 
 import (
 	"net/http"
+
+	"github.com/visonlv/go-vkit/grpcx"
 )
 
 type HttpRequest struct {
@@ -12,6 +14,11 @@ type HttpRequest struct {
 	contentType string
 	body        []byte
 	hasRead     bool
+	fileMap     map[string]*grpcx.FileInfo
+}
+
+func (r *HttpRequest) Request() *http.Request {
+	return r.r
 }
 
 func (r *HttpRequest) ContentType() string {
@@ -34,14 +41,20 @@ func (r *HttpRequest) Uri() string {
 	return r.uri
 }
 
-func (r *HttpRequest) Read() ([]byte, error) {
+func (r *HttpRequest) Read() ([]byte, map[string]*grpcx.FileInfo, error) {
 	if r.hasRead {
-		return r.body, nil
+		return r.body, r.fileMap, nil
 	}
-	b, err := requestPayload(r.r)
+	b, fs, err := requestPayload(r.r)
 	if err == nil {
+		r.fileMap = fs
 		r.hasRead = true
 		r.body = b
 	}
-	return b, err
+	return b, fs, err
+}
+
+func (r *HttpRequest) SetBody(b []byte) {
+	r.hasRead = true
+	r.body = b
 }
