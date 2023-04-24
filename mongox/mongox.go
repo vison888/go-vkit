@@ -57,7 +57,6 @@ func (the *MongoClient) QueryOne(ctx context.Context, colName string, filter, pR
 	return the.FindOne(ctx, colName, filter).Decode(pResult)
 }
 
-// TODO selector 使用
 func (the *MongoClient) Query(ctx context.Context, colName string, filter interface{}, selector interface{}, pResult interface{}, sortBy ...string) error {
 	var cur *mongo.Cursor
 	var err error

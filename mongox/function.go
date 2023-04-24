@@ -105,7 +105,6 @@ func struct2BsonM(obj interface{}, ignoreField ...string) bson.M {
 
 	var data = make(bson.M)
 	for i := 0; i < t.NumField(); i++ {
-		//TODO 是否还有更好的解决方案
 		name := t.Field(i).Tag.Get("bson")
 		name = strings.Replace(name, ",omitempty", "", -1)
 		if name == "" {
