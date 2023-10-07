@@ -1,13 +1,12 @@
 package codec
 
 import (
-	b "bytes"
 	"encoding/json"
 	"errors"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -18,14 +17,14 @@ type JsonCodec struct{}
 type ProtoCodec struct{}
 type WrapCodec struct{ encoding.Codec }
 
-var jsonpbMarshaler = &jsonpb.Marshaler{
-	EnumsAsInts:  false,
-	EmitDefaults: true,
-	OrigName:     true,
+var jsonpbMarshaler = &protojson.MarshalOptions{
+	//UseEnumNumbers: true,
+	UseProtoNames:   true,
+	EmitUnpopulated: true,
 }
 
-var jsonpbUnmarshaler = &jsonpb.Unmarshaler{
-	AllowUnknownFields: true,
+var jsonpbUnmarshaler = &protojson.UnmarshalOptions{
+	DiscardUnknown: true,
 }
 
 var (
@@ -41,7 +40,7 @@ var (
 	}
 )
 
-func (ProtoCodec) Marshal(v interface{}) ([]byte, error) {
+func (ProtoCodec) Marshal(v any) ([]byte, error) {
 	m, ok := v.(proto.Message)
 	if !ok {
 		return nil, ErrInvalidMessage
@@ -49,7 +48,7 @@ func (ProtoCodec) Marshal(v interface{}) ([]byte, error) {
 	return proto.Marshal(m)
 }
 
-func (ProtoCodec) Unmarshal(data []byte, v interface{}) error {
+func (ProtoCodec) Unmarshal(data []byte, v any) error {
 	m, ok := v.(proto.Message)
 	if !ok {
 		return ErrInvalidMessage
@@ -62,10 +61,10 @@ func (ProtoCodec) Name() string {
 	return "proto"
 }
 
-func (JsonCodec) Marshal(v interface{}) ([]byte, error) {
+func (JsonCodec) Marshal(v any) ([]byte, error) {
 	if pb, ok := v.(proto.Message); ok {
-		s, err := jsonpbMarshaler.MarshalToString(pb)
-		return []byte(s), err
+		s, err := jsonpbMarshaler.Marshal(pb)
+		return s, err
 	}
 
 	if raw, ok := v.([]byte); ok {
@@ -75,12 +74,12 @@ func (JsonCodec) Marshal(v interface{}) ([]byte, error) {
 	return json.Marshal(v)
 }
 
-func (JsonCodec) Unmarshal(data []byte, v interface{}) error {
+func (JsonCodec) Unmarshal(data []byte, v any) error {
 	if len(data) == 0 {
 		return nil
 	}
 	if pb, ok := v.(proto.Message); ok {
-		return jsonpbUnmarshaler.Unmarshal(b.NewReader(data), pb)
+		return jsonpbUnmarshaler.Unmarshal(data, pb)
 	}
 	return json.Unmarshal(data, v)
 }

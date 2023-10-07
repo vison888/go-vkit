@@ -23,7 +23,7 @@ func (g *grpcStream) Context() context.Context {
 	return g.context
 }
 
-func (g *grpcStream) Send(msg interface{}) error {
+func (g *grpcStream) Send(msg any) error {
 	if err := g.ClientStream.SendMsg(msg); err != nil {
 		g.setError(err)
 		return err
@@ -31,7 +31,7 @@ func (g *grpcStream) Send(msg interface{}) error {
 	return nil
 }
 
-func (g *grpcStream) Recv(msg interface{}) (err error) {
+func (g *grpcStream) Recv(msg any) (err error) {
 	defer g.setError(err)
 
 	if err = g.ClientStream.RecvMsg(msg); err != nil {

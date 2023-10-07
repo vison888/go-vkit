@@ -23,9 +23,9 @@ type ClientStream interface {
 	// Context for the stream
 	Context() context.Context
 	// Send will encode and send a request
-	Send(interface{}) error
+	Send(any) error
 	// Recv will decode and read a response
-	Recv(interface{}) error
+	Recv(any) error
 	// Error returns the stream error
 	Error() error
 	// Close closes the stream
@@ -33,6 +33,6 @@ type ClientStream interface {
 }
 
 type Client interface {
-	Invoke(ctx context.Context, serive, endpoint string, args interface{}, reply interface{}, opts ...grpc.CallOption) error
+	Invoke(ctx context.Context, serive, endpoint string, args any, reply any, opts ...grpc.CallOption) error
 	NewStream(ctx context.Context, desc *grpc.StreamDesc, serive, endpoint string, opts ...grpc.CallOption) (ClientStream, error)
 }

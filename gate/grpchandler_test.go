@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -54,7 +54,7 @@ func postData(url string, reqBody, token string) (string, int, error) {
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		fmt.Println(err)
 		return "", -1, err
@@ -65,7 +65,7 @@ func postData(url string, reqBody, token string) (string, int, error) {
 
 func startGrpcServer() {
 	svr := grpcserver.NewServer(grpcserver.GrpcAddr("0.0.0.0:10000"))
-	err := svr.RegisterApiEndpoint([]interface{}{&AuthService{}}, []*grpcx.ApiEndpoint{{
+	err := svr.RegisterApiEndpoint([]any{&AuthService{}}, []*grpcx.ApiEndpoint{{
 		Method:       "AuthService.RefleshUrl",
 		Url:          "/rpc/sso/AuthService.RefleshUrl",
 		ClientStream: false,

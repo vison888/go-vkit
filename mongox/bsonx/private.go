@@ -2,8 +2,8 @@ package bsonx
 
 import "reflect"
 
-func toSlice(value ...interface{}) []interface{} {
-	s := make([]interface{}, 0)
+func toSlice(value ...any) []any {
+	s := make([]any, 0)
 
 	for _, v := range value {
 		vo := reflect.ValueOf(v)

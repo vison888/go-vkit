@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
-//支持批量插入
-func (the *MysqlClient) Insert(o interface{}) error {
+// 支持批量插入
+func (the *MysqlClient) Insert(o any) error {
 	result := the.db.Create(o)
 	if result.Error != nil {
 		return result.Error
@@ -21,8 +21,8 @@ func (the *MysqlClient) Insert(o interface{}) error {
 	return nil
 }
 
-//分批插入 大量数据可用
-func (the *MysqlClient) InsertBatch(o interface{}, batchSize int) error {
+// 分批插入 大量数据可用
+func (the *MysqlClient) InsertBatch(o any, batchSize int) error {
 	result := the.db.CreateInBatches(o, batchSize)
 	if result.Error != nil {
 		return result.Error
@@ -30,7 +30,7 @@ func (the *MysqlClient) InsertBatch(o interface{}, batchSize int) error {
 	return nil
 }
 
-func (the *MysqlClient) DeleteById(o interface{}, id string) (bool, error) {
+func (the *MysqlClient) DeleteById(o any, id string) (bool, error) {
 	result := the.db.Delete(o, "id = ?", id)
 	if result.Error != nil {
 		return false, result.Error
@@ -38,8 +38,8 @@ func (the *MysqlClient) DeleteById(o interface{}, id string) (bool, error) {
 	return true, nil
 }
 
-//只能通过id删除
-func (the *MysqlClient) DeleteEx(o interface{}) (bool, error) {
+// 只能通过id删除
+func (the *MysqlClient) DeleteEx(o any) (bool, error) {
 	result := the.db.Delete(o)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -53,8 +53,8 @@ func (the *MysqlClient) DeleteEx(o interface{}) (bool, error) {
 	return true, nil
 }
 
-//通过id查找
-func (the *MysqlClient) FindById(o interface{}, id string) (bool, error) {
+// 通过id查找
+func (the *MysqlClient) FindById(o any, id string) (bool, error) {
 	result := the.db.First(o, "id = ?", id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -65,7 +65,7 @@ func (the *MysqlClient) FindById(o interface{}, id string) (bool, error) {
 	return true, nil
 }
 
-func (the *MysqlClient) FindPage(page int32, size int32, o interface{}, count *int32) error {
+func (the *MysqlClient) FindPage(page int32, size int32, o any, count *int32) error {
 	if page < 1 {
 		page = 1
 	}
@@ -91,7 +91,7 @@ func (the *MysqlClient) FindPage(page int32, size int32, o interface{}, count *i
 	return nil
 }
 
-func (the *MysqlClient) FindRawPage(sql string, page int32, size int32, o interface{}, count *int32) error {
+func (the *MysqlClient) FindRawPage(sql string, page int32, size int32, o any, count *int32) error {
 	// 数量sql
 	index := strings.Index(sql, "from")
 	if index == -1 {
@@ -125,7 +125,7 @@ func (the *MysqlClient) FindRawPage(sql string, page int32, size int32, o interf
 	return nil
 }
 
-func (the *MysqlClient) FindList(o interface{}) error {
+func (the *MysqlClient) FindList(o any) error {
 	result := the.Find(o)
 	if result.db.Error != nil {
 		return result.db.Error
@@ -133,7 +133,7 @@ func (the *MysqlClient) FindList(o interface{}) error {
 	return nil
 }
 
-func (the *MysqlClient) FindFirst(o interface{}) (bool, error) {
+func (the *MysqlClient) FindFirst(o any) (bool, error) {
 	result := the.db.First(o)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -144,8 +144,8 @@ func (the *MysqlClient) FindFirst(o interface{}) (bool, error) {
 	return true, nil
 }
 
-//支持多个数据更新
-func (the *MysqlClient) UpdateEx(o interface{}) error {
+// 支持多个数据更新
+func (the *MysqlClient) UpdateEx(o any) error {
 	result := the.db.Save(o)
 	if result.Error != nil {
 		return result.Error
@@ -153,8 +153,8 @@ func (the *MysqlClient) UpdateEx(o interface{}) error {
 	return nil
 }
 
-//是否存在
-func (the *MysqlClient) Exists(o interface{}) (bool, error) {
+// 是否存在
+func (the *MysqlClient) Exists(o any) (bool, error) {
 	result := the.db.First(o)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {

@@ -71,10 +71,12 @@ func (the *MongoClient) WithTimeout(ctx context.Context) (context.Context, conte
 	return ctxWithTimeout, cancel
 }
 
+// 判断是否为 mongo.ErrNoDocuments 找不到文档
 func (the *MongoClient) IsNoDocs(err error) bool {
 	return err == mongo.ErrNoDocuments
 }
 
+// 如果是 mongo.ErrNoDocuments 返回 nil
 func (the *MongoClient) ClearNoDocs(err error) error {
 	if err == mongo.ErrNoDocuments {
 		return nil

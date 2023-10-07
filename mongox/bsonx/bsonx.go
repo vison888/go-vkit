@@ -6,36 +6,36 @@ import (
 )
 
 // 等于
-func E(key string, value interface{}) bson.E {
+func E(key string, value any) bson.E {
 	return bson.E{Key: key, Value: value}
 }
 
 // 不等于
-func Ne(key string, value interface{}) bson.E {
+func Ne(key string, value any) bson.E {
 	return bson.E{Key: key,
 		Value: bson.D{bson.E{Key: "$ne", Value: value}}}
 }
 
 // 小于
-func Lt(key string, value interface{}) bson.E {
+func Lt(key string, value any) bson.E {
 	return bson.E{Key: key,
 		Value: bson.D{bson.E{Key: "$lt", Value: value}}}
 }
 
 // 小于等于
-func LtE(key string, value interface{}) bson.E {
+func LtE(key string, value any) bson.E {
 	return bson.E{Key: key,
 		Value: bson.D{bson.E{Key: "$lte", Value: value}}}
 }
 
 // 大于
-func Gt(key string, value interface{}) bson.E {
+func Gt(key string, value any) bson.E {
 	return bson.E{Key: key,
 		Value: bson.D{bson.E{Key: "$gt", Value: value}}}
 }
 
 // 大于等于
-func GtE(key string, value interface{}) bson.E {
+func GtE(key string, value any) bson.E {
 	return bson.E{Key: key,
 		Value: bson.D{bson.E{Key: "$gte", Value: value}}}
 }
@@ -60,7 +60,7 @@ func RegexIS(key, value string) bson.E {
 		Value: primitive.Regex{Pattern: value, Options: "is"}}
 }
 
-func In(key string, value ...interface{}) bson.E {
+func In(key string, value ...any) bson.E {
 	s := toSlice(value...)
 	return bson.E{Key: key,
 		Value: bson.D{bson.E{Key: "$in", Value: s}}}
@@ -75,7 +75,7 @@ func Or(e ...bson.E) bson.E {
 	return bson.E{Key: "$or", Value: or}
 }
 
-func All(key string, value ...interface{}) bson.E {
+func All(key string, value ...any) bson.E {
 	s := toSlice(value...)
 	return bson.E{Key: key,
 		Value: bson.D{bson.E{Key: "$all", Value: s}}}
@@ -102,7 +102,7 @@ func ElemMatch(key string, e ...bson.E) bson.E {
 		Value: bson.D{bson.E{Key: "$elemMatch", Value: m}}}
 }
 
-func ToFilter(filter bson.D) interface{} {
+func ToFilter(filter bson.D) any {
 	if len(filter) == 0 {
 		// cannot transform type primitive.D to a BSON Document:
 		// WriteNull can only write while positioned on a Element or Value but is positioned on a TopLevel
@@ -123,7 +123,7 @@ func Sort(key string, asc bool) bson.D {
 }
 
 // 只设置一个属性
-func SetKV(key string, value interface{}) bson.D {
+func SetKV(key string, value any) bson.D {
 	return Set(bson.E{Key: key, Value: value})
 }
 

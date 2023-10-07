@@ -67,7 +67,7 @@ func NewServer(opts ...GrpcOption) *GrpcServer {
 	return g
 }
 
-func (g *GrpcServer) handler(srv interface{}, stream grpc.ServerStream) (err error) {
+func (g *GrpcServer) handler(srv any, stream grpc.ServerStream) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			errorStr := fmt.Sprintf("[Grpcserver] panic recovered:%v ", r)
@@ -116,9 +116,9 @@ func (g *GrpcServer) handler(srv interface{}, stream grpc.ServerStream) (err err
 	if ctype, ok := md["content-type"]; ok {
 		ct = ctype
 	}
-	md["x-content-type"] = xct
 	md["content-type"] = ct
 	delete(md, "timeout")
+	delete(md, "x-content-type")
 
 	// create new context
 	ctx := meta.NewContext(stream.Context(), md)
@@ -167,12 +167,12 @@ func (g *GrpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct 
 	r := &GrpcRequest{
 		service:     g.opts.Name,
 		contentType: ct,
-		method:      h.method.Name,
+		method:      methodName,
 		stream:      false,
 		payload:     argv.Interface(),
 	}
 
-	fn := func(ctx context.Context, req *GrpcRequest, rsp interface{}) (err error) {
+	fn := func(ctx context.Context, req *GrpcRequest, rsp any) (err error) {
 		var in []reflect.Value
 		var out []reflect.Value
 		if h.reqType != nil {
@@ -248,12 +248,12 @@ func (g *GrpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct
 	r := &GrpcRequest{
 		service:     g.opts.Name,
 		contentType: ct,
-		method:      h.method.Name,
+		method:      methodName,
 		stream:      false,
 		payload:     argv.Interface(),
 	}
 
-	fn := func(ctx context.Context, req *GrpcRequest, rsp interface{}) (err error) {
+	fn := func(ctx context.Context, req *GrpcRequest, rsp any) (err error) {
 		// validate
 		validateFunc, b := h.reqType.MethodByName("Validate")
 		if b {
@@ -322,7 +322,7 @@ func (g *GrpcServer) processRequest(stream grpc.ServerStream, h *handlerInfo, ct
 	return nil
 }
 
-func (g *GrpcServer) RegisterApiEndpoint(list []interface{}, apiEndpointList []*grpcx.ApiEndpoint) (err error) {
+func (g *GrpcServer) RegisterApiEndpoint(list []any, apiEndpointList []*grpcx.ApiEndpoint) (err error) {
 	apiEndpointMap := make(map[string]*grpcx.ApiEndpoint, 0)
 	for _, v := range apiEndpointList {
 		apiEndpointMap[v.Method] = v
@@ -336,7 +336,7 @@ func (g *GrpcServer) RegisterApiEndpoint(list []interface{}, apiEndpointList []*
 	return nil
 }
 
-func (g *GrpcServer) RegisterWithUrl(i interface{}, apiEndpointMap map[string]*grpcx.ApiEndpoint) (err error) {
+func (g *GrpcServer) RegisterWithUrl(i any, apiEndpointMap map[string]*grpcx.ApiEndpoint) (err error) {
 	o := reflect.ValueOf(i)
 	hType := o.Type()
 	hName := hType.Elem().Name()
@@ -388,7 +388,7 @@ func (g *GrpcServer) RegisterWithUrl(i interface{}, apiEndpointMap map[string]*g
 	return nil
 }
 
-func (g *GrpcServer) Register(i interface{}) (err error) {
+func (g *GrpcServer) Register(i any) (err error) {
 	return g.RegisterWithUrl(i, nil)
 }
 

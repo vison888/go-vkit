@@ -17,7 +17,7 @@ type HandlerWrapper func(HandlerFunc) HandlerFunc
 
 var (
 	DefaultGrpcPort   = 10000
-	DefaultErrHandler = func(w http.ResponseWriter, r *http.Request, err interface{}) {
+	DefaultErrHandler = func(w http.ResponseWriter, r *http.Request, err any) {
 		errorStr := fmt.Sprintf("[gate] panic recovered:%v ", err)
 		logger.Errorf(errorStr)
 		logger.Error(string(debug.Stack()))
@@ -27,7 +27,7 @@ var (
 
 type HttpOptions struct {
 	GrpcPort     int
-	ErrHandler   func(w http.ResponseWriter, r *http.Request, err interface{})
+	ErrHandler   func(w http.ResponseWriter, r *http.Request, err any)
 	AuthHandler  func(w http.ResponseWriter, r *http.Request) error
 	HdlrWrappers []HandlerWrapper
 	// ws
@@ -59,7 +59,7 @@ func HttpWrapHandler(w HandlerWrapper) HttpOption {
 	}
 }
 
-func HttpErrHandler(h func(w http.ResponseWriter, r *http.Request, err interface{})) HttpOption {
+func HttpErrHandler(h func(w http.ResponseWriter, r *http.Request, err any)) HttpOption {
 	return func(o *HttpOptions) {
 		o.ErrHandler = h
 	}

@@ -5,7 +5,7 @@ type GrpcRequest struct {
 	method      string
 	contentType string
 	stream      bool
-	payload     interface{}
+	payload     any
 }
 
 func (r *GrpcRequest) Service() string {
@@ -24,6 +24,6 @@ func (r *GrpcRequest) Stream() bool {
 	return r.stream
 }
 
-func (r *GrpcRequest) Payload() interface{} {
+func (r *GrpcRequest) Payload() any {
 	return r.payload
 }

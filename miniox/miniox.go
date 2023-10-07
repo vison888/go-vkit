@@ -12,7 +12,6 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/visonlv/go-vkit/logger"
 )
 
 type MinioClient struct {
@@ -36,10 +35,9 @@ func NewClient(doMain, endPoint, accessKey, accessSecret, bucketName string) (*M
 	// 1. 获取客户端
 	client, err := minio.New(c.EndPoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(c.AccessKey, c.AccessSecret, ""),
-		Secure: false,
+		Secure: strings.HasPrefix(doMain, "https"),
 	})
 	if err != nil {
-		logger.Errorf("[miniox] NewClient fail:%s doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", err.Error(), doMain, endPoint, accessKey, accessSecret, bucketName)
 		return nil, err
 	}
 
@@ -50,26 +48,21 @@ func NewClient(doMain, endPoint, accessKey, accessSecret, bucketName string) (*M
 	// 2. 检查桶是否存在
 	exists, errBucketExists := c.Client.BucketExists(ctx, c.BucketName)
 	if errBucketExists == nil && exists {
-		logger.Errorf("[miniox] NewClient success exists doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", doMain, endPoint, accessKey, accessSecret, bucketName)
 		return c, nil
 	}
 
 	// 创建桶
 	err = c.Client.MakeBucket(ctx, c.BucketName, minio.MakeBucketOptions{})
 	if err != nil {
-		logger.Errorf("[miniox] NewClient create bucket fail:%s doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", err.Error(), doMain, endPoint, accessKey, accessSecret, bucketName)
 		return nil, err
 	}
 
-	logger.Errorf("[miniox] NewClient success doMain:%s endPoint:%s accessKey:%s accessSecret:%s bucketName:%s", doMain, endPoint, accessKey, accessSecret, bucketName)
 	return c, nil
 }
 
 // file: source file path . object: an object's whole name which use to be the path in minio(eg. bucket/object(xxx/xxx/xx.xx))
 func (the *MinioClient) UploadLocalFile(file string, object string) (url string, err error) {
-
 	ctx := context.Background()
-
 	// 1. 剥离后缀
 	file_suffix := path.Ext(file)
 	if file_suffix == "" {
@@ -120,13 +113,12 @@ func (m *MinioClient) DeleteFile(object string) (err error) {
 }
 
 func (m *MinioClient) DeleteFileByUrl(file_url string) (err error) {
-
 	u, err := url.Parse(file_url)
 	if err != nil {
 		return err
 	}
 
-	s := strings.Split(u.EscapedPath(), "/")
+	s := strings.Split(u.Path, "/")
 	// 第一个是空格
 	if len(s) < 3 {
 		return errors.New("url" + file_url + " is invalid")

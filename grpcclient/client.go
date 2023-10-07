@@ -80,7 +80,7 @@ func GetConnClient(addr string, opts ...Option) grpcx.Client {
 }
 
 // rc.pool = newPool(options.PoolSize, options.PoolTTL, rc.poolMaxIdle(), rc.poolMaxStreams())
-func (ccc *customClient) Invoke(ctx context.Context, service, endpoint string, args interface{}, reply interface{}, opts ...grpc.CallOption) error {
+func (ccc *customClient) Invoke(ctx context.Context, service, endpoint string, args any, reply any, opts ...grpc.CallOption) error {
 	method := methodToGRPC(service, endpoint)
 	header := make(map[string]string)
 

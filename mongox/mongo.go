@@ -8,7 +8,7 @@ import (
 )
 
 // 下面的封装是 mongodb api 进行封装，目的是添加超时取消设置~
-func (the *MongoClient) InsertOne(ctx context.Context, collName string, doc interface{},
+func (the *MongoClient) InsertOne(ctx context.Context, collName string, doc any,
 	opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -17,7 +17,7 @@ func (the *MongoClient) InsertOne(ctx context.Context, collName string, doc inte
 	return the.db.Collection(collName).InsertOne(ctxWithTimeout, doc, opts...)
 }
 
-func (the *MongoClient) InsertMany(ctx context.Context, collName string, docs []interface{},
+func (the *MongoClient) InsertMany(ctx context.Context, collName string, docs []any,
 	opts ...*options.InsertManyOptions) (*mongo.InsertManyResult, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -26,7 +26,7 @@ func (the *MongoClient) InsertMany(ctx context.Context, collName string, docs []
 	return the.db.Collection(collName).InsertMany(ctxWithTimeout, docs, opts...)
 }
 
-func (the *MongoClient) DeleteOne(ctx context.Context, collName string, filter interface{},
+func (the *MongoClient) DeleteOne(ctx context.Context, collName string, filter any,
 	opts ...*options.DeleteOptions) (int64, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -36,7 +36,7 @@ func (the *MongoClient) DeleteOne(ctx context.Context, collName string, filter i
 	return r.DeletedCount, e
 }
 
-func (the *MongoClient) DeleteMany(ctx context.Context, collName string, filter interface{},
+func (the *MongoClient) DeleteMany(ctx context.Context, collName string, filter any,
 	opts ...*options.DeleteOptions) (int64, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -46,7 +46,7 @@ func (the *MongoClient) DeleteMany(ctx context.Context, collName string, filter 
 	return r.DeletedCount, e
 }
 
-func (the *MongoClient) UpdateByID(ctx context.Context, collName string, id interface{}, update interface{},
+func (the *MongoClient) UpdateByID(ctx context.Context, collName string, id any, update any,
 	opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -55,7 +55,7 @@ func (the *MongoClient) UpdateByID(ctx context.Context, collName string, id inte
 	return the.db.Collection(collName).UpdateByID(ctxWithTimeout, id, update, opts...)
 }
 
-func (the *MongoClient) UpdateOne(ctx context.Context, collName string, filter interface{}, update interface{},
+func (the *MongoClient) UpdateOne(ctx context.Context, collName string, filter any, update any,
 	opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -64,7 +64,7 @@ func (the *MongoClient) UpdateOne(ctx context.Context, collName string, filter i
 	return the.db.Collection(collName).UpdateOne(ctxWithTimeout, filter, update, opts...)
 }
 
-func (the *MongoClient) UpdateMany(ctx context.Context, collName string, filter interface{}, update interface{},
+func (the *MongoClient) UpdateMany(ctx context.Context, collName string, filter any, update any,
 	opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -73,7 +73,7 @@ func (the *MongoClient) UpdateMany(ctx context.Context, collName string, filter 
 	return the.db.Collection(collName).UpdateMany(ctxWithTimeout, filter, update, opts...)
 }
 
-func (the *MongoClient) ReplaceOne(ctx context.Context, collName string, filter interface{}, replacement interface{},
+func (the *MongoClient) ReplaceOne(ctx context.Context, collName string, filter any, replacement any,
 	opts ...*options.ReplaceOptions) (*mongo.UpdateResult, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -82,7 +82,7 @@ func (the *MongoClient) ReplaceOne(ctx context.Context, collName string, filter 
 	return the.db.Collection(collName).ReplaceOne(ctxWithTimeout, filter, replacement, opts...)
 }
 
-func (the *MongoClient) Aggregate(ctx context.Context, collName string, pipeline interface{},
+func (the *MongoClient) Aggregate(ctx context.Context, collName string, pipeline any,
 	opts ...*options.AggregateOptions) (*mongo.Cursor, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -91,7 +91,7 @@ func (the *MongoClient) Aggregate(ctx context.Context, collName string, pipeline
 	return the.db.Collection(collName).Aggregate(ctxWithTimeout, pipeline, opts...)
 }
 
-func (the *MongoClient) CountDocuments(ctx context.Context, collName string, filter interface{},
+func (the *MongoClient) CountDocuments(ctx context.Context, collName string, filter any,
 	opts ...*options.CountOptions) (int64, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -109,8 +109,8 @@ func (the *MongoClient) EstimatedDocumentCount(ctx context.Context, collName str
 	return the.db.Collection(collName).EstimatedDocumentCount(ctxWithTimeout, opts...)
 }
 
-func (the *MongoClient) Distinct(ctx context.Context, collName string, fieldName string, filter interface{},
-	opts ...*options.DistinctOptions) ([]interface{}, error) {
+func (the *MongoClient) Distinct(ctx context.Context, collName string, fieldName string, filter any,
+	opts ...*options.DistinctOptions) ([]any, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
 	defer cancel()
@@ -118,7 +118,7 @@ func (the *MongoClient) Distinct(ctx context.Context, collName string, fieldName
 	return the.db.Collection(collName).Distinct(ctxWithTimeout, fieldName, fieldName, opts...)
 }
 
-func (the *MongoClient) Find(ctx context.Context, collName string, filter interface{},
+func (the *MongoClient) Find(ctx context.Context, collName string, filter any,
 	opts ...*options.FindOptions) (*mongo.Cursor, error) {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -127,7 +127,7 @@ func (the *MongoClient) Find(ctx context.Context, collName string, filter interf
 	return the.db.Collection(collName).Find(ctxWithTimeout, filter, opts...)
 }
 
-func (the *MongoClient) FindOne(ctx context.Context, collName string, filter interface{},
+func (the *MongoClient) FindOne(ctx context.Context, collName string, filter any,
 	opts ...*options.FindOneOptions) *mongo.SingleResult {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -136,7 +136,7 @@ func (the *MongoClient) FindOne(ctx context.Context, collName string, filter int
 	return the.db.Collection(collName).FindOne(ctxWithTimeout, filter, opts...)
 }
 
-func (the *MongoClient) FindOneAndDelete(ctx context.Context, collName string, filter interface{},
+func (the *MongoClient) FindOneAndDelete(ctx context.Context, collName string, filter any,
 	opts ...*options.FindOneAndDeleteOptions) *mongo.SingleResult {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
@@ -145,8 +145,8 @@ func (the *MongoClient) FindOneAndDelete(ctx context.Context, collName string, f
 	return the.db.Collection(collName).FindOneAndDelete(ctxWithTimeout, filter, opts...)
 }
 
-func (the *MongoClient) FindOneAndReplace(ctx context.Context, collName string, filter interface{},
-	replacement interface{}, opts ...*options.FindOneAndReplaceOptions) *mongo.SingleResult {
+func (the *MongoClient) FindOneAndReplace(ctx context.Context, collName string, filter any,
+	replacement any, opts ...*options.FindOneAndReplaceOptions) *mongo.SingleResult {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
 	defer cancel()
@@ -154,8 +154,8 @@ func (the *MongoClient) FindOneAndReplace(ctx context.Context, collName string, 
 	return the.db.Collection(collName).FindOneAndReplace(ctxWithTimeout, filter, replacement, opts...)
 }
 
-func (the *MongoClient) FindOneAndUpdate(ctx context.Context, collName string, filter interface{},
-	update interface{}, opts ...*options.FindOneAndUpdateOptions) *mongo.SingleResult {
+func (the *MongoClient) FindOneAndUpdate(ctx context.Context, collName string, filter any,
+	update any, opts ...*options.FindOneAndUpdateOptions) *mongo.SingleResult {
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, the.opTime)
 	defer cancel()

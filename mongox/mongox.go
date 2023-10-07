@@ -9,7 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func (the *MongoClient) DeleteById(ctx context.Context, collName string, id ...interface{}) (int64, error) {
+func (the *MongoClient) DeleteById(ctx context.Context, collName string, id ...any) (int64, error) {
 	ids := toSlice(id...)
 	if len(ids) == 1 {
 		filter := bson.M{"_id": ids[0]}
@@ -22,7 +22,7 @@ func (the *MongoClient) DeleteById(ctx context.Context, collName string, id ...i
 	}
 }
 
-func (the *MongoClient) QueryById(ctx context.Context, collName string, id, pResult interface{}) error {
+func (the *MongoClient) QueryById(ctx context.Context, collName string, id, pResult any) error {
 
 	filter := bson.M{"_id": id}
 
@@ -34,7 +34,7 @@ func (the *MongoClient) QueryById(ctx context.Context, collName string, id, pRes
 	return r.Decode(pResult)
 }
 
-func (the *MongoClient) DistinctQuery(ctx context.Context, colName, distinctField string, filter, result interface{}) error {
+func (the *MongoClient) DistinctQuery(ctx context.Context, colName, distinctField string, filter, result any) error {
 	array, err := the.Distinct(ctx, colName, distinctField, filter)
 	if err != nil {
 		return err
@@ -48,16 +48,17 @@ func (the *MongoClient) DistinctQuery(ctx context.Context, colName, distinctFiel
 	return err
 }
 
-func (the *MongoClient) QueryLatest(ctx context.Context, colName, sortBy string, filter, pResult interface{}) error {
+func (the *MongoClient) QueryLatest(ctx context.Context, colName, sortBy string, filter, pResult any) error {
 	return the.FindOne(ctx, colName, filter,
 		options.FindOne().SetSort(sort([]string{sortBy}))).Decode(pResult)
 }
 
-func (the *MongoClient) QueryOne(ctx context.Context, colName string, filter, pResult interface{}) error {
+func (the *MongoClient) QueryOne(ctx context.Context, colName string, filter, pResult any) error {
 	return the.FindOne(ctx, colName, filter).Decode(pResult)
 }
 
-func (the *MongoClient) Query(ctx context.Context, colName string, filter interface{}, selector interface{}, pResult interface{}, sortBy ...string) error {
+// TODO selector 使用
+func (the *MongoClient) Query(ctx context.Context, colName string, filter any, selector any, pResult any, sortBy ...string) error {
 	var cur *mongo.Cursor
 	var err error
 
@@ -78,13 +79,13 @@ func (the *MongoClient) Query(ctx context.Context, colName string, filter interf
 }
 
 // QueryCount 符合条件的记录数
-func (the *MongoClient) QueryCount(ctx context.Context, colName string, filter interface{}) (int64, error) {
+func (the *MongoClient) QueryCount(ctx context.Context, colName string, filter any) (int64, error) {
 	n, err := the.CountDocuments(ctx, colName, filter)
 	return n, err
 }
 
 // Insert 新增
-func (the *MongoClient) Insert(ctx context.Context, colName string, docs ...interface{}) error {
+func (the *MongoClient) Insert(ctx context.Context, colName string, docs ...any) error {
 	var err error
 	count := len(docs)
 	if count == 1 {
@@ -98,13 +99,13 @@ func (the *MongoClient) Insert(ctx context.Context, colName string, docs ...inte
 }
 
 // Delete 删除
-func (the *MongoClient) Delete(ctx context.Context, colName string, filter interface{}) (int64, error) {
+func (the *MongoClient) Delete(ctx context.Context, colName string, filter any) (int64, error) {
 	return the.DeleteMany(ctx, colName, filter)
 }
 
 // PagingQuery 分页查询
-func (the *MongoClient) QueryPaging(ctx context.Context, colName string, filter interface{},
-	sort interface{}, pageIndex, pageSize int32, pResult interface{}) (total int64, err error) {
+func (the *MongoClient) QueryPaging(ctx context.Context, colName string, filter any,
+	sort any, pageIndex, pageSize int32, pResult any) (total int64, err error) {
 	if pageIndex < 1 {
 		pageIndex = 1
 	}
@@ -144,8 +145,8 @@ func (the *MongoClient) QueryPaging(ctx context.Context, colName string, filter 
 }
 
 // PagingQuery 分页查询
-func (the *MongoClient) PagingQuery(ctx context.Context, colName string, filter interface{},
-	sortBy []string, pageIndex, pageSize int32, pResult interface{}) (int64, error) {
+func (the *MongoClient) PagingQuery(ctx context.Context, colName string, filter any,
+	sortBy []string, pageIndex, pageSize int32, pResult any) (int64, error) {
 
 	if pageIndex < 1 {
 		pageIndex = 1
@@ -185,7 +186,7 @@ func (the *MongoClient) PagingQuery(ctx context.Context, colName string, filter 
 	return count, err
 }
 
-func (the *MongoClient) UpdateAll(ctx context.Context, colName string, filter interface{}, update interface{}, ops interface{}) error {
+func (the *MongoClient) UpdateAll(ctx context.Context, colName string, filter any, update any, ops any) error {
 
 	var err error
 
@@ -208,7 +209,7 @@ func (the *MongoClient) UpdateAll(ctx context.Context, colName string, filter in
 	return err
 }
 
-func (the *MongoClient) UpdateSingleById(ctx context.Context, colName string, id string, update interface{}, noUpdateField ...string) error {
+func (the *MongoClient) UpdateSingleById(ctx context.Context, colName string, id string, update any, noUpdateField ...string) error {
 	switch update.(type) {
 	case bson.M:
 	default:
@@ -222,7 +223,7 @@ func (the *MongoClient) UpdateSingleById(ctx context.Context, colName string, id
 	return err
 }
 
-func (the *MongoClient) UpdateSingle(ctx context.Context, colName string, filter interface{}, update interface{}, ops interface{}, ignoreField ...string) error {
+func (the *MongoClient) UpdateSingle(ctx context.Context, colName string, filter any, update any, ops any, ignoreField ...string) error {
 
 	var err error
 
@@ -245,7 +246,7 @@ func (the *MongoClient) UpdateSingle(ctx context.Context, colName string, filter
 	return err
 }
 
-func (the *MongoClient) PipeQuery(ctx context.Context, colName string, pipeline interface{}, result interface{}) error {
+func (the *MongoClient) PipeQuery(ctx context.Context, colName string, pipeline any, result any) error {
 	cur, err := the.Collection(colName).Aggregate(ctx, pipeline)
 	if err != nil {
 		return err
@@ -255,7 +256,7 @@ func (the *MongoClient) PipeQuery(ctx context.Context, colName string, pipeline 
 	return iterate(ctx, cur, result)
 }
 
-func (the *MongoClient) Upsert(ctx context.Context, colName string, filter, update interface{}) error {
+func (the *MongoClient) Upsert(ctx context.Context, colName string, filter, update any) error {
 	switch update.(type) {
 	case bson.M:
 	default:

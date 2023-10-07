@@ -6,7 +6,7 @@ import (
 	"github.com/visonlv/go-vkit/errorsx/neterrors"
 )
 
-func FetchErrWithCode(resp interface{}, code int, err error) {
+func FetchErrWithCode(resp any, code int, err error) {
 	respv := reflect.ValueOf(resp)
 	codeField := respv.Elem().FieldByName("Code")
 	msgField := respv.Elem().FieldByName("Msg")
@@ -27,7 +27,7 @@ func FetchErrWithCode(resp interface{}, code int, err error) {
 	}
 }
 
-func FetchErr(resp interface{}, err error) {
+func FetchErr(resp any, err error) {
 	respv := reflect.ValueOf(resp)
 	codeField := respv.Elem().FieldByName("Code")
 	msgField := respv.Elem().FieldByName("Msg")

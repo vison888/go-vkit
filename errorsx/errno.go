@@ -29,7 +29,7 @@ func NewErrno(project int32, code int32, msg string) *Errno {
 	return err
 }
 
-func (e *Errno) Fail(format string, v ...interface{}) *Errno {
+func (e *Errno) Fail(format string, v ...any) *Errno {
 	ret := &Errno{Project: e.Project, Code: e.Code, Msg: fmt.Sprintf(format, v...)}
 	return ret
 }

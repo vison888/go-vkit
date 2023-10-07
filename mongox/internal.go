@@ -42,7 +42,7 @@ func sort(fields []string) bson.D {
 	return order
 }
 
-func iterate(ctx context.Context, cur *mongo.Cursor, result interface{}) error {
+func iterate(ctx context.Context, cur *mongo.Cursor, result any) error {
 	resultv := reflect.ValueOf(result)
 	if resultv.Kind() != reflect.Ptr || resultv.Elem().Kind() != reflect.Slice {
 		return errors.New("result argument must be a slice address")
@@ -83,7 +83,7 @@ func iterate(ctx context.Context, cur *mongo.Cursor, result interface{}) error {
 }
 
 // ignoreField 忽略不要更新的字段，比如 created_on, created_at
-func struct2BsonM(obj interface{}, ignoreField ...string) bson.M {
+func struct2BsonM(obj any, ignoreField ...string) bson.M {
 	ignoreField = append(ignoreField, "_id", "created_on", "created_at", "tenant_id")
 
 	t := reflect.TypeOf(obj)
@@ -105,6 +105,7 @@ func struct2BsonM(obj interface{}, ignoreField ...string) bson.M {
 
 	var data = make(bson.M)
 	for i := 0; i < t.NumField(); i++ {
+		//TODO 是否还有更好的解决方案
 		name := t.Field(i).Tag.Get("bson")
 		name = strings.Replace(name, ",omitempty", "", -1)
 		if name == "" {
@@ -121,8 +122,8 @@ func struct2BsonM(obj interface{}, ignoreField ...string) bson.M {
 	return data
 }
 
-func toSlice(value ...interface{}) []interface{} {
-	s := make([]interface{}, 0)
+func toSlice(value ...any) []any {
+	s := make([]any, 0)
 
 	for _, v := range value {
 		vo := reflect.ValueOf(v)

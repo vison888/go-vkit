@@ -44,7 +44,7 @@ type handlerInfo struct {
 	serverStream bool
 }
 
-func (h *NativeHandler) RegisterApiEndpoint(list []interface{}, apiEndpointList []*grpcx.ApiEndpoint) (err error) {
+func (h *NativeHandler) RegisterApiEndpoint(list []any, apiEndpointList []*grpcx.ApiEndpoint) (err error) {
 	apiEndpointMap := make(map[string]*grpcx.ApiEndpoint, 0)
 	for _, v := range apiEndpointList {
 		apiEndpointMap[v.Method] = v
@@ -58,7 +58,7 @@ func (h *NativeHandler) RegisterApiEndpoint(list []interface{}, apiEndpointList 
 	return nil
 }
 
-func (h *NativeHandler) RegisterWithUrl(i interface{}, apiEndpointMap map[string]*grpcx.ApiEndpoint) (err error) {
+func (h *NativeHandler) RegisterWithUrl(i any, apiEndpointMap map[string]*grpcx.ApiEndpoint) (err error) {
 	o := reflect.ValueOf(i)
 	hType := o.Type()
 	hName := hType.Elem().Name()
@@ -109,7 +109,7 @@ func (h *NativeHandler) RegisterWithUrl(i interface{}, apiEndpointMap map[string
 	return nil
 }
 
-func (h *NativeHandler) Register(i interface{}) (err error) {
+func (h *NativeHandler) Register(i any) (err error) {
 	return h.RegisterWithUrl(i, nil)
 }
 
@@ -128,7 +128,7 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if method != "POST" {
-		errorStr := fmt.Sprintf("[nativehandler req method:%s only support url:%s", method, r.RequestURI)
+		errorStr := fmt.Sprintf("req method:%s only support, url:%s", method, r.RequestURI)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
@@ -155,13 +155,13 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(service) == 0 {
-		errorStr := fmt.Sprintf("[nativehandler] service is empty url:%s", r.RequestURI)
+		errorStr := fmt.Sprintf("service is empty url:%s", r.RequestURI)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
 
 	if len(endpoint) == 0 {
-		errorStr := fmt.Sprintf("[nativehandler] endpoint is empty url:%s", r.RequestURI)
+		errorStr := fmt.Sprintf("endpoint is empty url:%s", r.RequestURI)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}
@@ -193,13 +193,13 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	fn := func(ctx context.Context, req *HttpRequest, resp *HttpResponse) error {
 		reqBytes, files, err := request.Read()
 		if err != nil {
-			errorStr := fmt.Sprintf("[nativehandler] %s url:%s", err.Error(), r.RequestURI)
+			errorStr := fmt.Sprintf("获取body失败 %s url:%s", err.Error(), r.RequestURI)
 			return neterrors.BadRequest(errorStr)
 		}
 
 		hi, b := h.handlers[endpoint]
 		if !b {
-			errorStr := fmt.Sprintf("[nativehandler] unknown method %s", endpoint)
+			errorStr := fmt.Sprintf("unknown method %s", endpoint)
 			return neterrors.BadRequest(errorStr)
 		}
 
@@ -208,12 +208,12 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 		var cd encoding.Codec
 		if cd = codec.DefaultGRPCCodecs[readCt]; cd.Name() != "json" {
-			errorStr := fmt.Sprintf("[nativehandler] not support content type:%s", r.RequestURI)
+			errorStr := fmt.Sprintf("not support content type:%s", r.RequestURI)
 			return neterrors.BadRequest(errorStr)
 		}
 
 		if err := cd.Unmarshal(reqBytes, argv.Interface()); err != nil {
-			errorStr := fmt.Sprintf("[nativehandler] Unmarshal error: %s", err.Error())
+			errorStr := fmt.Sprintf("Unmarshal error: %s", err.Error())
 			return neterrors.BadRequest(errorStr)
 		}
 
@@ -245,7 +245,7 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			errValue := out[0]
 			if errValue.Interface() != nil {
 				err := errValue.Interface().(error)
-				errorStr := fmt.Sprintf("[nativehandler] param error: %s", err.Error())
+				errorStr := fmt.Sprintf("param error: %s", err.Error())
 				return neterrors.BusinessError(-1, errorStr)
 			}
 		}
@@ -260,13 +260,13 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			//处理业务异常
 			if verr, ok := rerr.(*errorsx.Errno); ok {
 				if verr.Code != 0 {
-					errorStr := fmt.Sprintf("[nativehandler] call error: %s", verr.Error())
+					errorStr := fmt.Sprintf("call error: %s", verr.Error())
 					logger.Errorf(errorStr)
 					return neterrors.BusinessError(verr.Code, verr.Msg)
 				}
 			} else {
 				//其他异常统一包装
-				errorStr := fmt.Sprintf("[nativehandler] call error: %s", rerr.(error).Error())
+				errorStr := fmt.Sprintf("call error: %s", rerr.(error).Error())
 				logger.Errorf(errorStr)
 				return neterrors.BusinessError(-2, errorStr)
 			}
@@ -274,7 +274,7 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 		respBytes, err := cd.Marshal(replyv.Interface())
 		if err != nil {
-			logger.Infof("[nativehandler] jsonRaw Marshal fail:%s", err)
+			logger.Infof("jsonRaw Marshal fail:%s", err)
 			return neterrors.BadRequest(err.Error())
 		}
 

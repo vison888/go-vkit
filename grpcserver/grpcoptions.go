@@ -6,7 +6,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type HandlerFunc func(ctx context.Context, req *GrpcRequest, rsp interface{}) error
+type HandlerFunc func(ctx context.Context, req *GrpcRequest, rsp any) error
 type HandlerWrapper func(HandlerFunc) HandlerFunc
 
 var (

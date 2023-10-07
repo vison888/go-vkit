@@ -47,7 +47,7 @@ func Parse(err string) *NetError {
 	return e
 }
 
-func BusinessError(code int32, format string, a ...interface{}) error {
+func BusinessError(code int32, format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   code,
@@ -55,7 +55,7 @@ func BusinessError(code int32, format string, a ...interface{}) error {
 	}
 }
 
-func BadRequest(format string, a ...interface{}) error {
+func BadRequest(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -63,7 +63,7 @@ func BadRequest(format string, a ...interface{}) error {
 	}
 }
 
-func Unauthorized(format string, a ...interface{}) error {
+func Unauthorized(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -71,7 +71,7 @@ func Unauthorized(format string, a ...interface{}) error {
 	}
 }
 
-func Forbidden(format string, a ...interface{}) error {
+func Forbidden(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -79,7 +79,7 @@ func Forbidden(format string, a ...interface{}) error {
 	}
 }
 
-func NotFound(format string, a ...interface{}) error {
+func NotFound(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -87,7 +87,7 @@ func NotFound(format string, a ...interface{}) error {
 	}
 }
 
-func MethodNotAllowed(format string, a ...interface{}) error {
+func MethodNotAllowed(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -95,7 +95,7 @@ func MethodNotAllowed(format string, a ...interface{}) error {
 	}
 }
 
-func Timeout(format string, a ...interface{}) error {
+func Timeout(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -103,7 +103,7 @@ func Timeout(format string, a ...interface{}) error {
 	}
 }
 
-func Conflict(format string, a ...interface{}) error {
+func Conflict(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -111,7 +111,7 @@ func Conflict(format string, a ...interface{}) error {
 	}
 }
 
-func InternalServerError(format string, a ...interface{}) error {
+func InternalServerError(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -119,7 +119,7 @@ func InternalServerError(format string, a ...interface{}) error {
 	}
 }
 
-func NotImplemented(format string, a ...interface{}) error {
+func NotImplemented(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -127,7 +127,7 @@ func NotImplemented(format string, a ...interface{}) error {
 	}
 }
 
-func BadGateway(format string, a ...interface{}) error {
+func BadGateway(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -135,7 +135,7 @@ func BadGateway(format string, a ...interface{}) error {
 	}
 }
 
-func ServiceUnavailable(format string, a ...interface{}) error {
+func ServiceUnavailable(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,
@@ -143,7 +143,7 @@ func ServiceUnavailable(format string, a ...interface{}) error {
 	}
 }
 
-func GatewayTimeout(format string, a ...interface{}) error {
+func GatewayTimeout(format string, a ...any) error {
 	return &NetError{
 		Msg:    fmt.Sprintf(format, a...),
 		Code:   -1,

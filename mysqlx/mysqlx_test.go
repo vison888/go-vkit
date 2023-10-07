@@ -141,7 +141,7 @@ func TestTransaction(t *testing.T) {
 
 func TestMysqlClient_Exists(t *testing.T) {
 	type args struct {
-		o interface{}
+		o any
 	}
 	tests := []struct {
 		name    string

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -20,9 +19,17 @@ import (
 
 func ErrorResponse(w http.ResponseWriter, r *http.Request, _err error) {
 	var netErr *neterrors.NetError
-	if verr, ok := _err.(*neterrors.NetError); ok {
+	switch verr := _err.(type) {
+	case *neterrors.NetError:
 		netErr = verr
+	default:
+		netErr = &neterrors.NetError{
+			Msg:    "系统错误",
+			Code:   -1,
+			Status: 400,
+		}
 	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(int(netErr.Status))
@@ -51,7 +58,7 @@ func requestPayload(r *http.Request) (bytes []byte, fileMap map[string]*grpcx.Fi
 	switch {
 	case strings.Contains(ct, "application/json"):
 		defer closeBody(r.Body)
-		bytes, err = ioutil.ReadAll(r.Body)
+		bytes, err = io.ReadAll(r.Body)
 		return
 	case strings.Contains(ct, "application/x-www-form-urlencoded"):
 		r.ParseForm()
@@ -65,7 +72,7 @@ func requestPayload(r *http.Request) (bytes []byte, fileMap map[string]*grpcx.Fi
 		if err := r.ParseMultipartForm(int64(10 << 20)); err != nil {
 			return nil, nil, err
 		}
-		vals := make(map[string]interface{})
+		vals := make(map[string]any)
 		for k, v := range r.MultipartForm.Value {
 			vals[k] = strings.Join(v, ",")
 		}
@@ -79,7 +86,7 @@ func requestPayload(r *http.Request) (bytes []byte, fileMap map[string]*grpcx.Fi
 			if err != nil {
 				return nil, nil, err
 			}
-			b1, err := ioutil.ReadAll(f)
+			b1, err := io.ReadAll(f)
 			if err != nil {
 				return nil, nil, err
 			}
