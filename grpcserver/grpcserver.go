@@ -169,7 +169,9 @@ func (g *GrpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct 
 		contentType: ct,
 		method:      methodName,
 		stream:      false,
-		payload:     argv.Interface(),
+	}
+	if h.reqType != nil {
+		r.payload = argv.Interface()
 	}
 
 	fn := func(ctx context.Context, req *GrpcRequest, rsp any) (err error) {
