@@ -1,4 +1,4 @@
-# go-infore
+# go-vkit
 项目限制：  
 使用go1.17.7版本及以上  
 api统一格式  /前缀/服务名/模块.方法 如:/rpc/speech/AppService.Create  
