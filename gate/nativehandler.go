@@ -199,6 +199,9 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 		hi, b := h.handlers[endpoint]
 		if !b {
+			hi, b = h.handlers[request.uri]
+		}
+		if !b {
 			errorStr := fmt.Sprintf("unknown method %s", endpoint)
 			return neterrors.BadRequest(errorStr)
 		}
