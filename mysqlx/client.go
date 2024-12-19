@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/visonlv/go-vkit/logger"
+	"github.com/vison888/go-vkit/logger"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )

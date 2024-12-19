@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/visonlv/go-vkit/logger"
-	"github.com/visonlv/go-vkit/utilsx"
+	"github.com/vison888/go-vkit/logger"
+	"github.com/vison888/go-vkit/utilsx"
 )
 
 // CREATE DATABASE IF NOT EXISTS speech DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;

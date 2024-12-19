@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/visonlv/go-vkit/logger"
+	"github.com/vison888/go-vkit/logger"
 )
 
 // redis.Nil

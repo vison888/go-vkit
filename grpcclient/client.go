@@ -4,15 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/visonlv/go-vkit/codec"
-	"github.com/visonlv/go-vkit/errorsx/neterrors"
-	"github.com/visonlv/go-vkit/grpcx"
-	"github.com/visonlv/go-vkit/logger"
-	"github.com/visonlv/go-vkit/metadata"
+	"github.com/vison888/go-vkit/codec"
+	"github.com/vison888/go-vkit/errorsx/neterrors"
+	"github.com/vison888/go-vkit/grpcx"
+	"github.com/vison888/go-vkit/logger"
+	"github.com/vison888/go-vkit/metadata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 	gmetadata "google.golang.org/grpc/metadata"
@@ -100,14 +101,23 @@ func (ccc *customClient) Invoke(ctx context.Context, service, endpoint string, a
 	requestTimeout := ccc.opts.RequestTimeout
 	d, ok := ctx.Deadline()
 	if !ok {
+		if _, ok := header["timeout"]; ok {
+			timeout, err := strconv.Atoi(header["timeout"])
+			if err != nil {
+				logger.Errorf("timeout err:%s", err.Error())
+			} else {
+				requestTimeout = time.Second * time.Duration(timeout)
+			}
+		}
+		header["timeout"] = fmt.Sprintf("%d", requestTimeout)
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, requestTimeout)
 		defer cancel()
 	} else {
 		requestTimeout = time.Until(d)
+		header["timeout"] = fmt.Sprintf("%d", requestTimeout)
 	}
 
-	header["timeout"] = fmt.Sprintf("%d", requestTimeout)
 	header["x-content-type"] = xContentType
 	md := gmetadata.New(header)
 	ctx = gmetadata.NewOutgoingContext(ctx, md)

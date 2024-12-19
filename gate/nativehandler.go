@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/visonlv/go-vkit/codec"
-	"github.com/visonlv/go-vkit/errorsx"
-	"github.com/visonlv/go-vkit/errorsx/neterrors"
-	"github.com/visonlv/go-vkit/grpcx"
-	"github.com/visonlv/go-vkit/logger"
+	"github.com/vison888/go-vkit/codec"
+	"github.com/vison888/go-vkit/errorsx"
+	"github.com/vison888/go-vkit/errorsx/neterrors"
+	"github.com/vison888/go-vkit/grpcx"
+	"github.com/vison888/go-vkit/logger"
 	"google.golang.org/grpc/encoding"
 	gmetadata "google.golang.org/grpc/metadata"
 )
@@ -128,7 +128,7 @@ func (h *NativeHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if method != "POST" {
-		errorStr := fmt.Sprintf("req method:%s only support, url:%s", method, r.RequestURI)
+		errorStr := fmt.Sprintf("method:%s not support, url:%s", method, r.RequestURI)
 		ErrorResponse(w, r, neterrors.BadRequest(errorStr))
 		return
 	}

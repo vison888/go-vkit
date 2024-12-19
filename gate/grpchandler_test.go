@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/visonlv/go-vkit/errorsx/neterrors"
-	"github.com/visonlv/go-vkit/grpcclient"
-	"github.com/visonlv/go-vkit/grpcserver"
-	"github.com/visonlv/go-vkit/grpcx"
-	"github.com/visonlv/go-vkit/logger"
+	"github.com/vison888/go-vkit/errorsx/neterrors"
+	"github.com/vison888/go-vkit/grpcclient"
+	"github.com/vison888/go-vkit/grpcserver"
+	"github.com/vison888/go-vkit/grpcx"
+	"github.com/vison888/go-vkit/logger"
 )
 
 type AuthService struct {

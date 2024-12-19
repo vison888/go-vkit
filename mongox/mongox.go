@@ -186,6 +186,47 @@ func (the *MongoClient) PagingQuery(ctx context.Context, colName string, filter 
 	return count, err
 }
 
+func (the *MongoClient) PagingQueryWithPro(ctx context.Context, colName string, filter interface{},
+	sortBy []string, pageIndex, pageSize int32, pResult interface{}, projection interface{}) (int64, error) {
+
+	if pageIndex < 1 {
+		pageIndex = 1
+	}
+	if pageSize < 1 {
+		pageSize = 1
+	}
+
+	skip := (pageIndex - 1) * pageSize
+
+	var cur *mongo.Cursor
+	var err error
+
+	if len(sortBy) == 0 {
+		cur, err = the.Find(ctx, colName, filter,
+			options.Find().SetProjection(projection).SetSkip(int64(skip)).SetLimit(int64(pageSize)))
+	} else {
+		cur, err = the.Find(ctx, colName, filter, options.Find().SetProjection(projection).
+			SetSort(sort(sortBy)).SetSkip(int64(skip)).SetLimit(int64(pageSize)))
+	}
+
+	if err != nil {
+		return 0, err
+	}
+	defer cur.Close(ctx)
+
+	err = cur.All(ctx, pResult)
+	if err != nil {
+		return 0, err
+	}
+
+	count, err := the.QueryCount(ctx, colName, filter)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, err
+}
+
 func (the *MongoClient) UpdateAll(ctx context.Context, colName string, filter any, update any, ops any) error {
 
 	var err error

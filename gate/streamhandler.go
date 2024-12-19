@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/visonlv/go-vkit/errorsx/neterrors"
-	"github.com/visonlv/go-vkit/grpcclient"
-	"github.com/visonlv/go-vkit/grpcx"
-	"github.com/visonlv/go-vkit/logger"
-	meta "github.com/visonlv/go-vkit/metadata"
+	"github.com/vison888/go-vkit/errorsx/neterrors"
+	"github.com/vison888/go-vkit/grpcclient"
+	"github.com/vison888/go-vkit/grpcx"
+	"github.com/vison888/go-vkit/logger"
+	meta "github.com/vison888/go-vkit/metadata"
 
 	"github.com/gorilla/websocket"
 )

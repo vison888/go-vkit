@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/visonlv/go-vkit/errorsx/neterrors"
-	"github.com/visonlv/go-vkit/grpcx"
+	"github.com/vison888/go-vkit/errorsx/neterrors"
+	"github.com/vison888/go-vkit/grpcx"
 	"google.golang.org/grpc"
 )
 

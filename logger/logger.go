@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
 )
@@ -35,93 +34,108 @@ func (level Level) String() string {
 	}
 }
 
-var (
-	nodeName string
-	appName  string
-	podName  string
-	podInfo  string
-	logDir   string
-
-	mutex         sync.Mutex
-	stdWrite      io.Writer
-	logFile       *os.File
-	outputBuf     []byte
-	lineCount     int32
-	createFileDay int32
-	deleteFileDay int32
+const (
+	SplitTypeDate = iota
+	SplitTypeHour
 )
 
-func getSystemEnvAndCmdArg() map[string]string {
-	m := make(map[string]string)
-	for _, env := range os.Environ() {
-		ss := strings.SplitN(env, "=", 2)
-		k := ss[0]
-		if len(k) > 0 && len(ss) > 1 {
-			v := ss[1]
-			m[k] = v
-		}
-	}
-
-	for i := 0; i < len(os.Args); i++ {
-		s := os.Args[i]
-		if strings.HasPrefix(s, "--") {
-			ss := strings.SplitN(strings.TrimPrefix(s, "--"), "=", 2)
-			k, v := ss[0], ""
-			if len(ss) > 1 {
-				v = ss[1]
-			}
-			m[k] = v
-			continue
-		}
-	}
-	return m
+type LogCfg struct {
+	// 日志保存时间
+	KeepSecond int64
+	// 日志目录
+	LogDir string
+	// 日志切割方式
+	SplitType int
 }
 
-func init() {
-	m := getSystemEnvAndCmdArg()
-	key := "NODE_NAME"
-	nodeName = ""
-	if val, ok := m[key]; ok {
-		nodeName = val
-		podInfo = podInfo + fmt.Sprintf("[%s]", nodeName)
-	}
+var (
+	initOnce sync.Once
 
-	key = "POD_NAME"
-	podName = ""
-	if val, ok := m[key]; ok {
-		podName = val
-		podInfo = podInfo + fmt.Sprintf("[%s]", podName)
-	}
+	logCfg         LoggerOptions
+	wMutex         sync.Mutex
+	stdWrite       io.Writer
+	logFile        *os.File
+	outputBuf      []byte
+	lineCount      int32
+	createFileDate int32
+	createFileHour int32
+	deleteFileDate int32
+)
 
-	key = "APP_NAME"
-	appName = ""
-	if val, ok := m[key]; ok {
-		appName = val
-		podInfo = podInfo + fmt.Sprintf("[%s] ", appName)
-	}
+type LoggerOptions struct {
+	// 日志保存时间
+	KeepSecond int64
+	// 日志目录
+	LogDir string
+	// 日志切割方式
+	SplitType int
+	// 回调
+	CallBack func(string)
+}
 
-	stdWrite = os.Stdout
-	key = "LOG_DIR"
-	logDir = "./logs/"
-	if val, ok := m[key]; ok {
-		logDir = val
+type LoggerOption func(o *LoggerOptions)
+
+func newLoggerOptions(opts ...LoggerOption) LoggerOptions {
+	opt := LoggerOptions{
+		KeepSecond: 3600 * 24 * 7,
+		LogDir:     "./logs/",
+		SplitType:  SplitTypeDate,
+		CallBack:   nil,
 	}
-	tryNewFile(true)
-	go mainloop()
+	for _, o := range opts {
+		o(&opt)
+	}
+	return opt
+}
+
+func WithKeepSecond(keepSecond int64) LoggerOption {
+	return func(o *LoggerOptions) {
+		o.KeepSecond = keepSecond
+	}
+}
+
+func WithLogDir(logDir string) LoggerOption {
+	return func(o *LoggerOptions) {
+		o.LogDir = logDir
+	}
+}
+
+func WithSplitType(splitType int) LoggerOption {
+	return func(o *LoggerOptions) {
+		o.SplitType = splitType
+	}
+}
+
+func WithCallBack(callBack func(string)) LoggerOption {
+	return func(o *LoggerOptions) {
+		o.CallBack = callBack
+	}
+}
+
+func tryInit() {
+	Init()
+}
+
+func Init(opts ...LoggerOption) {
+	initOnce.Do(func() {
+		logCfg = newLoggerOptions(opts...)
+		stdWrite = os.Stdout
+		tryNewFile(true)
+		go mainloop()
+	})
+
 }
 
 // logs/appname/podname.time.log
 func tryNewFile(force bool) {
 	// 日期不一样或者行数达到上限
-	if lineCount > FileMaxLine || createFileDay != int32(time.Now().YearDay()) || force {
-		// builf file path
-		timeStr := time.Now().Format("20060102150405")
-		fileDir := fmt.Sprintf("%s%s", logDir, appName)
+	if force || lineCount > FileMaxLine ||
+		(logCfg.SplitType == SplitTypeDate && createFileDate != int32(time.Now().YearDay())) ||
+		(logCfg.SplitType == SplitTypeHour && createFileHour != int32(time.Now().Hour())) {
+		cur := time.Now()
+		timeStr := cur.Format("20060102150405")
+		fileDir := logCfg.LogDir
 		filePath := fmt.Sprintf("%s/%s.log", fileDir, timeStr)
-		if podName != "" {
-			filePath = fmt.Sprintf("%s/%s.%s.log", fileDir, podName, timeStr)
-		}
-
 		//try create dir
 		_, err := os.Stat(fileDir)
 		if err != nil {
@@ -138,7 +152,8 @@ func tryNewFile(force bool) {
 			panic(fmt.Sprintf("open log file failed, err:%s", err))
 		}
 		lineCount = 0
-		createFileDay = int32(time.Now().YearDay())
+		createFileDate = int32(cur.YearDay())
+		createFileHour = int32(cur.Hour())
 		if logFile != nil {
 			logFile.Close()
 		}
@@ -160,17 +175,16 @@ func mainloop() {
 
 func tryDelteFile(date *time.Time) {
 	// 每日凌晨删除
-	if deleteFileDay != int32(date.YearDay()) {
-		deleteFileDay = int32(date.YearDay())
-		fileDir := fmt.Sprintf("%s%s", logDir, appName)
-		fileInfoList, err := os.ReadDir(fileDir)
+	if deleteFileDate != int32(date.YearDay()) {
+		deleteFileDate = int32(date.YearDay())
+		fileInfoList, err := os.ReadDir(logCfg.LogDir)
 		if err != nil {
 			return
 		}
 
 		for i := range fileInfoList {
 			fileName := fileInfoList[i].Name()
-			filePath := fileDir + fileName
+			filePath := logCfg.LogDir + fileName
 			if needDelete(date, filePath) {
 				os.Remove(filePath)
 				fmt.Printf("delete file%s \n", filePath)
@@ -193,7 +207,7 @@ func needDelete(date *time.Time, filePath string) bool {
 		return false
 	}
 
-	if date.Unix()-fi.ModTime().Unix() > 3600*24*7 {
+	if date.Unix()-fi.ModTime().Unix() > int64(logCfg.KeepSecond) {
 		return true
 	}
 
@@ -201,9 +215,10 @@ func needDelete(date *time.Time, filePath string) bool {
 }
 
 func formatAndWrite(l Level, format string, v ...any) {
+	tryInit()
 	now := time.Now()
-	mutex.Lock()
-	defer mutex.Unlock()
+	wMutex.Lock()
+	defer wMutex.Unlock()
 
 	outputBuf = outputBuf[:0]
 	formatHeader(&outputBuf, l, now)
@@ -213,6 +228,9 @@ func formatAndWrite(l Level, format string, v ...any) {
 	stdWrite.Write(outputBuf)
 	logFile.Write(outputBuf)
 	lineCount++
+	if logCfg.CallBack != nil {
+		logCfg.CallBack(string(outputBuf))
+	}
 	tryNewFile(false)
 }
 
@@ -221,7 +239,6 @@ func formatHeader(buf *[]byte, l Level, t time.Time) {
 	*buf = append(*buf, l.String()...)
 	timeStr := t.Format("[2006-01-02 15:04:05.000000]")
 	*buf = append(*buf, timeStr...)
-	*buf = append(*buf, podInfo...)
 }
 
 func Infof(format string, v ...any) {
@@ -262,6 +279,5 @@ func JsonInfo(format string, v any) {
 		Errorf("e:%s", e)
 		return
 	}
-
 	Debugf(format, string(bb))
 }

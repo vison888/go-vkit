@@ -3,7 +3,7 @@ package utilsx
 import (
 	"reflect"
 
-	"github.com/visonlv/go-vkit/errorsx/neterrors"
+	"github.com/vison888/go-vkit/errorsx/neterrors"
 )
 
 func FetchErrWithCode(resp any, code int, err error) {

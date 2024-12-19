@@ -1,4 +1,4 @@
-module github.com/visonlv/go-vkit
+module github.com/vison888/go-vkit
 
 go 1.20
 

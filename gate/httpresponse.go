@@ -3,7 +3,7 @@ package gate
 import (
 	"net/http"
 
-	"github.com/visonlv/go-vkit/logger"
+	"github.com/vison888/go-vkit/logger"
 )
 
 type HttpResponse struct {

@@ -3,7 +3,7 @@ package gate
 import (
 	"net/http"
 
-	"github.com/visonlv/go-vkit/grpcx"
+	"github.com/vison888/go-vkit/grpcx"
 )
 
 type HttpRequest struct {

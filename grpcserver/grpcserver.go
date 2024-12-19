@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/visonlv/go-vkit/codec"
-	"github.com/visonlv/go-vkit/errorsx"
-	"github.com/visonlv/go-vkit/errorsx/neterrors"
-	"github.com/visonlv/go-vkit/grpcx"
-	"github.com/visonlv/go-vkit/logger"
-	meta "github.com/visonlv/go-vkit/metadata"
+	"github.com/vison888/go-vkit/codec"
+	"github.com/vison888/go-vkit/errorsx"
+	"github.com/vison888/go-vkit/errorsx/neterrors"
+	"github.com/vison888/go-vkit/grpcx"
+	"github.com/vison888/go-vkit/logger"
+	meta "github.com/vison888/go-vkit/metadata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
@@ -140,6 +140,9 @@ func (g *GrpcServer) handler(srv any, stream grpc.ServerStream) (err error) {
 
 	h, b := g.handlers[methodName]
 	if !b {
+		h, b = g.handlers[fullMethod]
+	}
+	if !b {
 		errorStr := fmt.Sprintf("[Grpcserver] unknown method %s", methodName)
 		logger.Errorf(errorStr)
 		return neterrors.NotFound(errorStr)
@@ -153,12 +156,7 @@ func (g *GrpcServer) handler(srv any, stream grpc.ServerStream) (err error) {
 }
 
 func (g *GrpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct string, xct string, methodName string, ctx context.Context) error {
-	var argv reflect.Value
 	replyv := reflect.New(h.respType.Elem())
-	if h.reqType != nil {
-		argv = reflect.New(h.reqType.Elem())
-	}
-
 	setStreamFunc, b := h.respType.MethodByName("SetStream")
 	if b {
 		setStreamFunc.Func.Call([]reflect.Value{reflect.ValueOf(replyv.Interface()), reflect.ValueOf(stream)})
@@ -170,7 +168,10 @@ func (g *GrpcServer) processStream(stream grpc.ServerStream, h *handlerInfo, ct 
 		method:      methodName,
 		stream:      false,
 	}
+
+	var argv reflect.Value
 	if h.reqType != nil {
+		argv = reflect.New(h.reqType.Elem())
 		r.payload = argv.Interface()
 	}
 

@@ -64,10 +64,6 @@ func (the *NatsClient) Subscribe(subj string, cb nats.MsgHandler) (*nats.Subscri
 	return the.conn.Subscribe(subj, cb)
 }
 
-func (the *NatsClient) QueueSubscribe(subj, queue string, cb nats.MsgHandler) (*nats.Subscription, error) {
-	return the.conn.QueueSubscribe(subj, queue, cb)
-}
-
 func (the *NatsClient) Publish(subj string, data []byte) error {
 	err := the.conn.Publish(subj, data)
 	if err != nil {
